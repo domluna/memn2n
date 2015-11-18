@@ -12,7 +12,6 @@ from itertools import chain
 dir_1k = "data/tasks_1-20_v1-2/en/"
 dir_10k = "data/tasks_1-20_v1-2/en-10k/"
 
-train, test = load_challenge(dir_1k, 1)
 
 # represent story?
 # 3D array
@@ -29,9 +28,20 @@ train, test = load_challenge(dir_1k, 1)
 # if time is enabled: vocab_size = vocab_size + size of memory
 # total words = total words + 1, the extra 1 is for time words
 
-print(train[0][0])
-print(train[0][1])
-print(train[0][2])
+# FROM Matlab impl
+
+# word, sentence, story
+# story (20, 1000, 1000)
+
+# questions (10, 1000)
+
+# word, question -- represents the sentence of the question
+# qstory (20, 1000)
+#
+# if we have time enabled the last memory slot is used for that
+#
+
+train, test = load_challenge(dir_1k, 4)
 
 # TODO: vocab, padding, and turns words to id
 vocab = sorted(reduce(lambda x, y: x | y, (set(list(chain.from_iterable(s)) + q + a) for s, q, a in train + test)))

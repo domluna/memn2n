@@ -1,165 +1,135 @@
 from __future__ import absolute_import
 from __future__ import division
+from __future__ import print_function
 
-import autograd.numpy as np
-import autograd.numpy.random as nr
 import tensorflow as tf
+import numpy as np
 from six.moves import range
 
-def iid_gaussian(mean=0., std=1.):
-    return lambda s: nr.randn(*s) * std + mean
+def softmax_1d(x):
+    exped = tf.exp(x)
+    s = tf.reduce_sum(exped)
+    return exped / s
 
-def iid_uniform(low, high):
-    return lambda s: nr.rand(*s) * (high - low) + low
+class MemN2NCell(object):
+    """
+    End-To-End Memory Network as described in [1].
 
-def softmax(x, axis=1, keepdims=True):
-    out = np.exp(x)
-    return out / np.sum(out, axis=axis, keepdims=keepdims)
+    [1] http://arxiv.org/abs/1503.08895
+    """
+    def __init__(self, vocab_size, sentence_maxlen,
+        emb_size=40,
+        mem_size=50,
+        enable_time=True,
+        use_bow=False,
+        randomize_time = 0.1,
+        initializer=tf.random_normal_initializer(stddev=0.1)):
+        pass
 
-def logsoftmax(x, axis=1, keepdims=True):
-    return np.log(softmax(x, axis, keepdims))
+    def __call__(self, arg):
+        pass
 
 class MemN2N(object):
+    """
+    End-To-End Memory Network as described in [1].
+
+    [1] http://arxiv.org/abs/1503.08895
+    """
     def __init__(self, vocab_size, sentence_maxlen,
-            embed_size=50,
-            mem_size=50,
-            hops=3,
-            enable_time=True,
-            # use_bow=False,
-            randomize_time = 0.1,
-            share_type='adjacent',
-            init=iid_gaussian(mean=0., std=0.1)):
+        emb_size=40,
+        mem_size=50,
+        enable_time=True,
+        hops=3,
+        # use_bow=False,
+        randomize_time = 0.1,
+        share_type='adjacent',
+        initializer=tf.random_normal_initializer(stddev=0.1)):
 
         self.vocab_size = vocab_size
         self.mem_size = mem_size
-        self.embed_size = embed_size
-        self.hops = hops
+        self.emb_size = emb_size
 
-        self.params = {}
-        self.params['A'] = init((embed_size, vocab_size))
-        self.params['B'] = init((embed_size, vocab_size))
-        self.params['C'] = init((embed_size, embed_size))
-        self.params['W'] = init((vocab_size, embed_size))
+        # Embeddings
+        self.input_emb = tf.Variable(initializer([vocab_size, emb_size]))
+        self.query_emb = tf.Variable(initializer([vocab_size, emb_size]))
+        self.output_emb = tf.Variable(initializer([vocab_size, emb_size]))
 
-        # memory
-        self.input_mem = np.zeros((mem_size, embed_size))
-        self.output_mem = np.zeros((mem_size, embed_size))
+        # output weight matrix
+        self.output_weights = tf.Variable(initializer([emb_size, vocab_size]))
 
-        # temporal encodings
-        self.params['TA'] = init((mem_size, embed_size))
-        self.params['TC'] = init((mem_size, embed_size))
+        # Temporal Encoding from section 4.1 of [1]
+        # TODO: figure this out
+        # output_te = tf.reduce_sum(o_emb[i], 0) + self.output_time_enc[i]
+        # self.input_time_enc = tf.Variable(initializer((mem_size, emb_size)))
+        # self.output_time_enc = tf.Variable(initializer((mem_size, emb_size)))
 
-        # position encoding
-        self.PE = np.zeros((embed_size, sentence_maxlen))
+        # Memory
+        self.input_mem = tf.Variable(tf.zeros((mem_size, emb_size)),
+            trainable=False)
+        self.output_mem = tf.Variable(tf.zeros((mem_size, emb_size)),
+            trainable=False)
+
+        # Postion Encoding from section 4.1 of [1]
+        _sentence_enc = np.zeros((sentence_maxlen, emb_size))
         J = sentence_maxlen+1
-        d = embed_size+1
-        for k in range(1, d):
-            for j in range(1, J):
-                self.PE[k-1, j-1] = 1 - (j/J) - (k/d)*(1 - 2*j/J)
+        d = emb_size+1
+        for j in range(1, J):
+            for k in range(1, d):
+                _sentence_enc[j-1, k-1] = 1 - (j/J) - (k/d)*(1 - 2*j/J)
+        self.sentence_enc = tf.constant(_sentence_enc)
 
-
-    # story -> 3d array
-    # question -> 2d array
-    def fprop(story, question):
+    def _step(sentences, query, answer):
         """
-            story and question are lists of the ids words
-            corresponding to the vocabulary.
+        sentences -> 2D tensor
+        query -> 1D tensor
+        answer -> 1D tensor
 
-            len(story) and the story themself should be
-            padded to fixed length by a null symbol prior calling
-            fprop.
-
-            Ex. len(story) == mem_size
-
-            length of the story themselves should be the length of the longest
-            sentence in the story.
-
-            m_i = sum_j (l_j * Ax_ij)
-
-            Ax_ij is the the embedding of the jth word in the ith sentence. It
-            has dimension embed_size.
-
-            We lookup the value of x_ij in A and multiply it by
-            l_j
-
-            l_j is a column vector with the structure:
-
-            l_kj = (1 - j/J) - (k/d)(1 - 2j/J)     # 1-based indexing
-
-            iterate over k
-
-            For 0-based indexing:
-
-                j = j + 1           ????
-                d = embed_size
-                k/d = (0, 1]
-
-            J is the number of words in the sentence, d is the dimension
-            of the embedding (embed_size).
-
-            In addition we encode temporal information through special matrices
-            TA and TOM.
-
-            m_i = sum_j (Ax_ij) + TA(i)
-
-            story should be indexed in reverse, reflecting their
-            relative distance from the question so that story[0] is
-            the last sentence of the story.
-
+        First dim of all of these is the batch size?
         """
-
-        A = self.params['A']
-        B = self.params['B']
-        C = self.params['C']
-        W = self.params['W']
-        TA = self.params['TA']
-        TC = self.params['TC']
-        IM = self.input_mem
-        OM = self.output_mem
-
-        Bx = B[:, question]
+        # batch, sentence, word, embval
+        i_emb = tf.nn.embedding_lookup(self.input_emb, sentences)
+        q_emb = tf.nn.embedding_lookup(self.query_emb, question)
+        o_emb = tf.nn.embedding_lookup(self.output_emb, answer)
 
         # TODO: figure out reverse-order temporal thing
-        for i, s in enumerate(story):
+        # TODO: we can batch the sentence thing
+        # if we have 50 memory slots and 160 sentences, we only use
+        # the last 50 sentences. Dependent on when the question is asked!
+        n = tf.shape(sentences)[0]
+        for i in range(n):
             # input memory representation
-            A_i = A[:, s] # (embed_size x sentence_maxlen)
-            pe = np.sum(A_i * self.PE, axis=1) # position encoding
-            te = np.sum(A_i, axis=1) + TA[i] # temporal encoding
-            IM[1:, :] = IM[-1, :]
-            IM[0, :] = te + pe
+            input_pe = tf.reduce_sum(i_emb[i] * self.sentence_enc, 0) #
+            input_enc_val = input_pe
+            input_tmp = tf.slice(self.input_mem, [0, 0], [self.mem_size-1, -1])
+            new_input_mem = tf.concat(0, [tf.expand_dims(input_enc_val, 0), input_tmp])
+            self.input_mem.assign(new_input_mem)
 
             # output memory representation
-            C_i = C[:, s] # (embed_size x sentence_maxlen)
-            pe = np.sum(C_i * self.PE, axis=1) # position encoding
-            te = np.sum(C_i, axis=1) + TC[i] # temporal encoding
-            OM[1:, :] = OM[-1, :]
-            OM[0, :] = te + pe
+            output_pe = tf.reduce_sum(o_emb[i] * self.sentence_enc, 0)
+            output_enc_val = output_pe
+            output_tmp = tf.slice(self.output_mem, [0, 0], [self.mem_size-1, -1])
+            new_output_mem = tf.concat(0, [tf.expand_dims(output_enc_val, 0), output_tmp])
+            self.output_mem.assign(new_output_mem)
 
         # process question
-        u = np.sum(B[:, question] * self.PE, axis=1)
+        u = tf.reduce_sum(q_emb * self.sentence_enc, 0)
 
-        probs = softmax(np.dot(IM, u), axis=0) # (mem_size x 1)
+        # (mem_size x 1)
+        probs = softmax_1d(tf.matmul(self.input_mem, tf.reshape(u, [self.emb_size, 1])))
 
-        # output
-        o = np.sum(probs.reshape(-1,1) * OM, axis=0)
+        # output (emb_size x 1)
+        o = tf.reduce_sum(probs * self.output_mem, 0)
 
-        # TODO: generalize for k hops
-        a_hat = softmax(np.dot(W, o + u), axis=0) # (vocab_size x 1)
-        return a_hat
+        # TODO: if we have rnn sharing add matrix H to matmul u
+        return o + u
 
 
-    # TODO: multiple words
-    # currently get mean log loss of answer?
-    def loss_func(self, story, question, answer):
-        answers_pred = fprop(story, question)
-        return -np.mean(np.log(answers_pred[answer]))
+    def compute(sentences, query, answer):
+        # The output of each forward pass is used as the query input
+        # for the next hop.
+        for i in range(self.hops):
+            query = self._step(sentences, query, answer)
 
-    def pred_func(self, story, question):
-        answers_pred = fprop(story, question)
-        pass
-
-    def get_params(self):
-        return self.params
-
-    def set_params(self, params):
-        self.params = params
+        # TODO: do something with answer here?
+        return softmax_1d(tf.matmul(tf.reshape(o + u, [self.emb_size, 1]),
+            self.output_weights))
