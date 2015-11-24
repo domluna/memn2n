@@ -6,130 +6,154 @@ import tensorflow as tf
 import numpy as np
 from six.moves import range
 
-def softmax_1d(x):
-    exped = tf.exp(x)
-    s = tf.reduce_sum(exped)
-    return exped / s
+# TODO: think about the core components structure
+# I: (input feature map) - convert sentence to input repr
+# G: (generalization) - update current memory state given input
+# O: (output feature map) - compute output given input and memory
+# R: (response) - decode output to give final response to user
+#
+# I: This should take care of truncating/padding + sentence encoding
+# G: just update the memory
+# O: sentence encoding
 
-class MemN2NCell(object):
-    """
-    End-To-End Memory Network as described in [1].
-
-    [1] http://arxiv.org/abs/1503.08895
-    """
-    def __init__(self, vocab_size, sentence_maxlen,
-        emb_size=40,
-        mem_size=50,
-        enable_time=True,
-        use_bow=False,
-        randomize_time = 0.1,
-        initializer=tf.random_normal_initializer(stddev=0.1)):
-        pass
-
-    def __call__(self, arg):
-        pass
+def position_encoding(sentence_size, embedding_size):
+    # Postion Encoding from section 4.1 of [1]
+    encoding = np.zeros((sentence_size, embedding_size))
+    J = sentence_size+1
+    d = embedding_size+1
+    for j in range(1, J):
+        for k in range(1, d):
+            encoding[j-1, k-1] = 1 - (j/J) - (k/d)*(1 - 2*j/J)
+    return tf.constant(encoding, dtype=tf.float32)
 
 class MemN2N(object):
     """
     End-To-End Memory Network as described in [1].
-
-    [1] http://arxiv.org/abs/1503.08895
+[1] http://arxiv.org/abs/1503.08895
     """
-    def __init__(self, vocab_size, sentence_maxlen,
-        emb_size=40,
-        mem_size=50,
-        enable_time=True,
-        hops=3,
-        # use_bow=False,
-        randomize_time = 0.1,
-        share_type='adjacent',
-        initializer=tf.random_normal_initializer(stddev=0.1)):
+    def __init__(self, vocab_size, sentence_size,
+        memory_size,
+        embedding_size,
+        hops=1,
+        init=tf.random_normal_initializer(stddev=0.1),
+        scope=None):
 
         self.vocab_size = vocab_size
-        self.mem_size = mem_size
-        self.emb_size = emb_size
+        self.sentence_size = sentence_size
+        self.memory_size = memory_size
+        self.embedding_size = embedding_size
+        self.hops = hops
 
-        # Embeddings
-        self.input_emb = tf.Variable(initializer([vocab_size, emb_size]))
-        self.query_emb = tf.Variable(initializer([vocab_size, emb_size]))
-        self.output_emb = tf.Variable(initializer([vocab_size, emb_size]))
+        with tf.variable_scope(scope or type(self).__name__, initializer=init):
 
-        # output weight matrix
-        self.output_weights = tf.Variable(initializer([emb_size, vocab_size]))
+            # input_embedding = tf.get_variable('input_embedding',
+            #     [vocab_size, embedding_size])
+            # query_embedding = tf.get_variable('query_embedding',
+            #     [vocab_size, embedding_size])
+            # output_embedding = tf.get_variable('output_embedding',
+            #     [vocab_size, embedding_size])
+            #
+            # W = tf.get_variable('W', [embedding_size, vocab_size])
+            # H = tf.get_variable('H', [embedding_size, embedding_size])
 
-        # Temporal Encoding from section 4.1 of [1]
-        # TODO: figure this out
-        # output_te = tf.reduce_sum(o_emb[i], 0) + self.output_time_enc[i]
-        # self.input_time_enc = tf.Variable(initializer((mem_size, emb_size)))
-        # self.output_time_enc = tf.Variable(initializer((mem_size, emb_size)))
+            # memory = Memory(memory_size, embedding_size)
 
-        # Memory
-        self.input_mem = tf.Variable(tf.zeros((mem_size, emb_size)),
-            trainable=False)
-        self.output_mem = tf.Variable(tf.zeros((mem_size, emb_size)),
-            trainable=False)
+            # Postion Encoding from section 4.1 of [1]
+            # encoding = position_encoding(sentence_size, embedding_size)
 
-        # Postion Encoding from section 4.1 of [1]
-        _sentence_enc = np.zeros((sentence_maxlen, emb_size))
-        J = sentence_maxlen+1
-        d = emb_size+1
-        for j in range(1, J):
-            for k in range(1, d):
-                _sentence_enc[j-1, k-1] = 1 - (j/J) - (k/d)*(1 - 2*j/J)
-        self.sentence_enc = tf.constant(_sentence_enc)
+            # Embeddings
+            self.input_embedding = tf.Variable(init([vocab_size, embedding_size]))
+            self.query_embedding = tf.Variable(init([vocab_size, embedding_size]))
+            self.output_embedding = tf.Variable(init([vocab_size, embedding_size]))
 
-    def _step(sentences, query, answer):
+            # output weight matrix
+            self.W = tf.Variable(init([embedding_size, vocab_size]))
+            self.H = tf.Variable(init([embedding_size, embedding_size]))
+
+            # Memory
+            self.memory = Memory(memory_size, embedding_size)
+
+            # Postion Encoding from section 4.1 of [1]
+            self.encoding = position_encoding(sentence_size, embedding_size)
+
+    def _step(self, sentences, query, reuse=None):
         """
         sentences -> 2D tensor
         query -> 1D tensor
         answer -> 1D tensor
 
-        First dim of all of these is the batch size?
+        Assume input has been preprocessed.
         """
-        # batch, sentence, word, embval
-        i_emb = tf.nn.embedding_lookup(self.input_emb, sentences)
-        q_emb = tf.nn.embedding_lookup(self.query_emb, question)
-        o_emb = tf.nn.embedding_lookup(self.output_emb, answer)
+        # with tf.variable_scope(scope or type(self).__name__, reuse=True):
 
-        # TODO: figure out reverse-order temporal thing
-        # TODO: we can batch the sentence thing
-        # if we have 50 memory slots and 160 sentences, we only use
-        # the last 50 sentences. Dependent on when the question is asked!
-        n = tf.shape(sentences)[0]
-        for i in range(n):
-            # input memory representation
-            input_pe = tf.reduce_sum(i_emb[i] * self.sentence_enc, 0) #
-            input_enc_val = input_pe
-            input_tmp = tf.slice(self.input_mem, [0, 0], [self.mem_size-1, -1])
-            new_input_mem = tf.concat(0, [tf.expand_dims(input_enc_val, 0), input_tmp])
-            self.input_mem.assign(new_input_mem)
+        # embeddings
+        i_emb = tf.nn.embedding_lookup(self.input_embedding, sentences)
+        q_emb = tf.nn.embedding_lookup(self.query_embedding, query)
+        o_emb = tf.nn.embedding_lookup(self.output_embedding, sentences)
 
-            # output memory representation
-            output_pe = tf.reduce_sum(o_emb[i] * self.sentence_enc, 0)
-            output_enc_val = output_pe
-            output_tmp = tf.slice(self.output_mem, [0, 0], [self.mem_size-1, -1])
-            new_output_mem = tf.concat(0, [tf.expand_dims(output_enc_val, 0), output_tmp])
-            self.output_mem.assign(new_output_mem)
+        ns = tf.shape(sentences)[0]
+        ns = 2
+        # ns = sentences.get_shape()[0]
+        tiled = tf.tile(self.encoding, [ns, 1])
+        encs = tf.reshape(tiled, [ns, self.sentence_size, self.embedding_size])
 
-        # process question
-        u = tf.reduce_sum(q_emb * self.sentence_enc, 0)
+        new_memory_input = tf.reduce_sum(i_emb * encs, 1)
+        new_memory_output = tf.reduce_sum(o_emb * encs, 1)
 
-        # (mem_size x 1)
-        probs = softmax_1d(tf.matmul(self.input_mem, tf.reshape(u, [self.emb_size, 1])))
+        # process query
+        u = tf.reduce_sum(q_emb * self.encoding, 0)
 
-        # output (emb_size x 1)
-        o = tf.reduce_sum(probs * self.output_mem, 0)
+        # (memory_size x 1)
+        input_memory = self.memory(new_memory_input, scope="input")
+        probs = tf.nn.softmax(tf.matmul(input_memory, tf.expand_dims(u, -1)))
 
-        # TODO: if we have rnn sharing add matrix H to matmul u
-        return o + u
+        # output (embedding_size x 1)
+        output_memory = self.memory(new_memory_output, scope="output")
+        o = tf.reduce_sum(probs * output_memory, 0)
 
+        hu = tf.matmul(self.H, tf.expand_dims(u, -1))
+        return o + tf.squeeze(hu)
 
-    def compute(sentences, query, answer):
-        # The output of each forward pass is used as the query input
-        # for the next hop.
+    def __call__(self, sentences, query):
         for i in range(self.hops):
-            query = self._step(sentences, query, answer)
+            query = self._step(sentences, query)
+        pred = tf.matmul(tf.expand_dims(query, 0), self.W)
+        return pred
+        # return tf.reshape(pred, [-1])
 
-        # TODO: do something with answer here?
-        return softmax_1d(tf.matmul(tf.reshape(o + u, [self.emb_size, 1]),
-            self.output_weights))
+class Memory(object):
+    def __init__(self, memory_size, embedding_size):
+        self.memory_size = memory_size
+        self.embedding_size = embedding_size
+
+    def access_memory(self, name="memory"):
+        return tf.get_variable(name,
+            shape=[self.memory_size, self.embedding_size],
+            initializer=tf.zeros_initializer,
+            trainable=False)
+
+    def reset(self, scope=None):
+        """
+        Resets memory values to all zeros.
+        """
+        with tf.variable_scope(scope or type(self).__name__):
+            memory = self.access_memory()
+            tf.assign(memory, tf.zeros_like(memory))
+
+    def __call__(self, new_memory, scope=None):
+        """
+        Update memory.
+
+        Inputs:
+        - new_memory a 2D Tensor, (memory_size, embedding_size)
+
+        Outputs:
+        - updated memory, 2D Tensor, (memory_size, embedding_size)
+        """
+        with tf.variable_scope(scope or type(self).__name__, reuse=None):
+            # update memory
+            ns = tf.shape(new_memory)[0]
+            memory = self.access_memory()
+            old_memory = tf.slice(memory, [2, 0], [-1, -1])
+            tf.assign(memory, tf.concat(0, [new_memory, old_memory]))
+            return memory
