@@ -28,7 +28,7 @@ dir_10k = "data/tasks_1-20_v1-2/en-10k/"
 # if we have time enabled the last memory slot is used for that
 #
 
-train, test = load_challenge(dir_1k, 4)
+train, test = load_challenge(dir_1k, 1)
 
 vocab = sorted(reduce(lambda x, y: x | y, (set(list(chain.from_iterable(s)) + q + a) for s, q, a in train + test)))
 word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
@@ -47,33 +47,47 @@ embedding_size = 40
 trainS, trainQ, trainA = vectorize_data(train, word_idx, sentence_size, memory_size)
 testS, testQ, testA = vectorize_data(test, word_idx, sentence_size, memory_size)
 
-print(trainS[0])
-print(trainQ[0])
-print(trainA[0])
-
+# print(trainS[0])
+# print(trainQ[0])
+# print(trainA[0])
 stories = tf.placeholder(tf.int32, [None, sentence_size], name="stories")
 query = tf.placeholder(tf.int32, [sentence_size], name="query")
 answer = tf.placeholder(tf.float32, [None, vocab_size], name="answer")
+
+# params
+learning_rate = 1e-2
+epochs = 25
+batch_size = 32
+nd = trainS.shape[0]
 
 model = MemN2N(vocab_size, sentence_size, memory_size, embedding_size)
 
 # cross entropy loss + Adam optimizer
 pred = model(stories, query)
 cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, answer))
-optimizer = tf.train.AdamOptimizer(learning_rate=0.01).minimize(cost)
+optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+correct_pred = tf.cast(tf.equal(tf.argmax(pred, 1), tf.argmax(answer, 1)), "float")
 
-# Init all variables
-init = tf.initialize_all_variables()
-
-# TODO: fix tf.shape problems
 # TODO: try to make input cleaner
-# TODO: variable scoping, make sure it's legit
 with tf.Session() as sess:
-    sess.run(init)
+    sess.run(tf.initialize_all_variables())
+    for n in range(epochs):
+        #cost
+        avg_cost = 0.0
+        for i in range(nd):
+            s = trainS[i]
+            q = trainQ[i]
+            a = np.reshape(trainA[i], (1, -1))
+            avg_cost += sess.run(cost, feed_dict={stories: s, query: q, answer: a})
+            if i % batch_size == 0:
+                sess.run(optimizer, feed_dict={stories: s, query: q, answer: a})
+        print('Epoch {0}, Cost {1}'.format(n+1, avg_cost / nd))
 
-    # TODO: epochs
-    print(trainS[0].shape, trainQ[0].shape)
-    ans = np.reshape(trainA[0], (1, -1))
-    sess.run(optimizer, feed_dict={stories: trainS[0], query: trainQ[0], answer: ans})
-    c = sess.run(cost, feed_dict={stories: trainS[0], query: trainQ[0], answer: ans})
-    print('Cost', c)
+        # correct prediction
+        acc = 0.0
+        for i in range(nd):
+            s = testS[i]
+            q = testQ[i]
+            a = np.reshape(testA[i], (1, -1))
+            acc += sess.run(correct_pred, feed_dict={stories: s, query: q, answer: a})
+        print('Test Accuracy: {0}'.format(acc / nd))
