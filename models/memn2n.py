@@ -1,12 +1,10 @@
 from __future__ import absolute_import
 from __future__ import division
-from __future__ import print_function
 
 import tensorflow as tf
 import numpy as np
 from six.moves import range
 
-# TODO: think about the core components structure
 # I: (input feature map) - convert sentence to input repr
 # G: (generalization) - update current memory state given input
 # O: (output feature map) - compute output given input and memory
@@ -14,7 +12,7 @@ from six.moves import range
 
 def position_encoding(sentence_size, embedding_size):
     # Postion Encoding from section 4.1 of [1]
-    encoding = np.zeros((sentence_size, embedding_size))
+    encoding = np.ones((sentence_size, embedding_size))
     J = sentence_size+1
     d = embedding_size+1
     for j in range(1, J):
@@ -27,13 +25,14 @@ class MemN2N(object):
     End-To-End Memory Network as described in [1].
 [1] http://arxiv.org/abs/1503.08895
     """
-    def __init__(self, vocab_size, sentence_size,
+    def __init__(self, batch_size, vocab_size, sentence_size,
         memory_size,
         embedding_size,
         hops=1,
         init=tf.random_normal_initializer(stddev=0.1),
         name='MemN2N'):
 
+        self.batch_size = batch_size
         self.vocab_size = vocab_size
         self.sentence_size = sentence_size
         self.memory_size = memory_size
@@ -52,88 +51,45 @@ class MemN2N(object):
             self.H = tf.Variable(init([embedding_size, embedding_size]))
 
             # Memory
-            self.input_memory = Memory(memory_size, embedding_size, name="input_memory")
-            self.output_memory = Memory(memory_size, embedding_size, name="output_memory")
+            # self.memory = tf.Variable(tf.zeros([batch_size, memory_size, sentence_size]))
 
             # Postion Encoding from section 4.1 of [1]
             self.encoding = position_encoding(sentence_size, embedding_size)
 
-    def _step(self, ns, i_emb, q_emb, o_emb):
-        """
-        sentences -> 2D tensor
-        query -> 1D tensor
-        answer -> 1D tensor
+    def input_module(self, i_emb, u):
+        # u -> (batch_size, embedding_size)
+        # i_mem -> (batch_size, memory_size, embedding_size)
+        # probs -> (batch_size, memory_size)
+        i_mem = tf.reduce_sum(i_emb * self.encoding, 2)
+        ts = tf.transpose(i_mem, perm=[0, 2, 1])
+        uu = tf.expand_dims(u, -1)
+        dotted = tf.reduce_sum(ts * uu, 1)
+        probs = tf.nn.softmax(dotted)
+        return probs
 
-        Assume input has been preprocessed.
-        """
-        tiled = tf.tile(self.encoding, tf.pack([ns, 1]))
-        encs = tf.reshape(tiled, tf.pack([ns, self.sentence_size, self.embedding_size]))
+    def output_module(self, probs, o_emb):
+        # probs -> (batch_size, memory_size)
+        # o_mem -> (batch_size, memory_size, embedding_size)
+        # o -> (batch_size, embedding_size)
+        o_mem = tf.reduce_sum(o_emb * self.encoding, 2)
+        o = tf.reduce_sum(o_mem * tf.expand_dims(probs, -1), 1)
+        return o
 
-        new_memory_input = tf.reduce_sum(i_emb * encs, 1)
-        new_memory_output = tf.reduce_sum(o_emb * encs, 1)
-
-        # process query
-        u = tf.reduce_sum(q_emb * self.encoding, 0)
-
-        # self.input_memory(new_memory_input)
-        probs = tf.nn.softmax(tf.matmul(new_memory_input, tf.expand_dims(u, -1)))
-
-        # self.output_memory(new_memory_output)
-        o = tf.reduce_sum(probs * new_memory_output, 0)
-
-        # hu = tf.matmul(self.H, tf.expand_dims(u, -1))
-        # return o + tf.squeeze(hu)
-        return o + u
-
-    def __call__(self, sentences, query):
+    def __call__(self, stories, queries):
         with tf.variable_scope(self.name):
-            # embeddings
-            i_emb = tf.nn.embedding_lookup(self.A, sentences)
-            q_emb = tf.nn.embedding_lookup(self.B, query)
-            o_emb = tf.nn.embedding_lookup(self.C, sentences)
+            q_emb = tf.nn.embedding_lookup(self.B, queries)
+            u_0 = tf.reduce_sum(q_emb * self.encoding, 1)
+            inputs = [u_0]
+            for _ in range(self.hops):
+                i_emb = tf.nn.embedding_lookup(self.A, stories)
+                o_emb = tf.nn.embedding_lookup(self.C, stories)
 
-            ns = tf.shape(sentences)[0]
-            # res = None
-            # for i in range(self.hops):
-            res = self._step(ns, i_emb, q_emb, o_emb)
+                u_k = inputs[-1]
+                probs = self.input_module(i_emb, u_k)
+                o_k = self.output_module(probs, o_emb)
+                u_k_next = o_k + tf.matmul(u_k, self.H)
+                inputs.append(u_k_next)
 
-            pred = tf.matmul(tf.expand_dims(res, 0), self.W)
-
-            # reset memory
-            # self.input_memory.reset()
-            # self.output_memory.reset()
-
+            # (batch_size, vocab_size)
+            pred = tf.matmul(inputs[-1], self.W)
             return pred
-
-class Memory(object):
-    def __init__(self, memory_size, embedding_size, name="Memory"):
-        self.memory_size = memory_size
-        self.embedding_size = embedding_size
-        self.name = name
-
-        with tf.variable_scope(self.name):
-            self.memory = tf.Variable(tf.zeros([memory_size, embedding_size]), trainable=False)
-
-    def reset(self):
-        """
-        Resets memory values to all zeros.
-        """
-        with tf.variable_scope(self.name):
-            tf.assign(self.memory, tf.zeros_like(self.memory))
-
-    def __call__(self, new_memory):
-        """
-        Update memory.
-
-        Inputs:
-        - new_memory: 2D Tensor, (memory_size, embedding_size)
-
-        Outputs:
-        - Updated memory, 2D Tensor, (memory_size, embedding_size)
-        """
-        with tf.variable_scope(self.name):
-            # update memory
-            ns = tf.shape(new_memory)[0]
-            old_memory = tf.slice(self.memory, tf.pack([ns, 0]), [-1, -1])
-            updated_memory = tf.concat(0, [new_memory, old_memory])
-            tf.assign(self.memory, updated_memory)
