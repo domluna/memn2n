@@ -3,7 +3,7 @@ from __future__ import print_function
 
 from process_data import load_challenge, vectorize_data
 from sklearn.cross_validation import train_test_split
-from models.memn2n import MemN2N
+from memn2n.memn2n import MemN2N
 from itertools import chain
 
 import tensorflow as tf
