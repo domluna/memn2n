@@ -94,7 +94,7 @@ def vectorize_data(data, word_idx, sentence_size, memory_size):
 
         # take only the most recent sentences that fit in memory
         # pad to memory_size
-        ss = ss[::-1][:memory_size]
+        ss = ss[::-1][:memory_size][::-1]
         lm = max(0, memory_size - len(ss))
         for _ in range(lm):
             ss.append([0] * sentence_size)
@@ -102,9 +102,9 @@ def vectorize_data(data, word_idx, sentence_size, memory_size):
         lq = max(0, sentence_size - len(query))
         q = [word_idx[w] for w in query] + [0] * lq
 
-        a = answer[0]
-        y = np.zeros(len(word_idx) + 1) # 0 is reversed for nil word
-        y[word_idx[a]] = 1
+        y = np.zeros(len(word_idx) + 1) # 0 is reserved for nil word
+        for a in answer:
+            y[word_idx[a]] = 1
 
         S.append(ss)
         Q.append(q)
