@@ -9,6 +9,9 @@ from itertools import chain
 import tensorflow as tf
 import numpy as np
 
+# random seed
+seed = 1234
+
 # challenge data
 dir_1k = "data/tasks_1-20_v1-2/en/"
 dir_10k = "data/tasks_1-20_v1-2/en-10k/"
@@ -30,12 +33,12 @@ embedding_size = 40
 
 # train/validation/test sets
 S, Q, A = vectorize_data(train, word_idx, sentence_size, memory_size)
-trainS, valS, trainQ, valQ, trainA, valA = train_test_split(S, Q, A, test_size=0.10)
+trainS, valS, trainQ, valQ, trainA, valA = train_test_split(S, Q, A, test_size=0.10, random_state=seed)
 testS, testQ, testA = vectorize_data(test, word_idx, sentence_size, memory_size)
 
 stories = tf.placeholder(tf.int32, [None, memory_size, sentence_size], name="stories")
 query = tf.placeholder(tf.int32, [None, sentence_size], name="query")
-answer = tf.placeholder(tf.float32, [None, vocab_size], name="answer")
+answer = tf.placeholder(tf.int32, [None, vocab_size], name="answer")
 
 print(S.shape)
 print(valS.shape)
@@ -43,25 +46,30 @@ print(valQ.shape)
 print(valA.shape)
 
 # params
-learning_rate = 0.01
+learning_rate = 1e-2
 epochs = 70
 n_data = trainS.shape[0]
 
+tf.set_random_seed(seed)
 model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size)
 
 # functions
 pred = model(stories, query)
-cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, answer))
-train_op = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
-accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(pred, 1), tf.argmax(answer, 1)), "float"))
+cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(pred, tf.cast(answer, tf.float32)))
+train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+correct = tf.nn.in_top_k(pred, answer, 1)
+error_op = 1.0 - tf.reduce_mean(tf.cast(correct, tf.int32))
 pred_idxs = tf.argmax(pred, 1)
 target_idxs = tf.argmax(answer, 1)
 
 # summaries
 logdir = '/tmp/memn2n-logs'
-summary_validation_accuracy = tf.scalar_summary('validation_accuracy', accuracy)
+summary_validation_accuracy = tf.scalar_summary('validation_error', error_op)
 summary_validation_cost = tf.scalar_summary('validation_cost', cost)
 merged_summary_op = tf.merge_all_summaries()
+
+# numerics_op = tf.add_check_numerics_ops()
+# print(numerics_op)
 
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
@@ -85,9 +93,11 @@ with tf.Session() as sess:
 
         # correct prediction
         val_cost = sess.run(cost, feed_dict={stories: valS, query: valQ, answer: valA})
-        val_acc = sess.run(accuracy, feed_dict={stories: valS, query: valQ, answer: valA})
-        print('Validation Cost   {0:10.4f}'.format(val_cost))
-        print('Validation Accuracy   {0:10.4f}'.format(val_acc))
+        val_err = sess.run(error_op, feed_dict={stories: valS, query: valQ, answer: valA})
+        # train_err = sess.run(error_op, feed_dict={stories: trainS, query: trainQ, answer: trainA})
+        print('Validation Cost       {0:10.4f}'.format(val_cost))
+        print('Validation Error      {0:10.4f}'.format(val_err))
+        # print('Training  Error       {0:10.4f}'.format(train_err))
 
         # print('Test Accuracy         {0:10.4f}'.format(test_acc))
         # pi = sess.run(pred_idxs, feed_dict={stories: valS, query: valQ})
