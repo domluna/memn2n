@@ -30,7 +30,7 @@ class MemN2N(object):
         clip_norm=40,
         epochs=20,
         initializer=tf.random_normal_initializer(stddev=0.1),
-        optimizer=tf.train.AdamOptimizer(1e-2),
+        optimizer=tf.train.AdamOptimizer(learning_rate=1e-2),
         session=tf.Session(),
         name='MemN2N'):
 

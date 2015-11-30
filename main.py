@@ -63,6 +63,8 @@ tf.set_random_seed(seed)
 
 val_labels = np.argmax(valA, axis=1)
 
+print(len(word_idx))
+
 #model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size)
 with tf.Session() as sess:
     model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess)
@@ -90,3 +92,4 @@ with tf.Session() as sess:
         print("Prediction Indices", val_preds)
         print("Labels Indices", val_labels)
         print('-----------------------')
+
