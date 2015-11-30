@@ -102,7 +102,7 @@ class MemN2N(object):
         for t in range(self._epochs):
             start = 0
             total_loss = 0.0
-            for start in range(0, self._batch_size, n_data):
+            for start in range(0, n_data, self._batch_size):
                 end = start + self_.batch_size
                 train_S = stories[start:end]
                 train_Q = queries[start:end]
