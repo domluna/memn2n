@@ -46,34 +46,30 @@ class MemN2N(object):
         self._opt = optimizer
         self._name = name
 
-        g = tf.Graph()
-        self._g = g
-        with self._g.as_default():
-        
-            self.build_inputs()
-            self.build_vars()
+        self.build_inputs()
+        self.build_vars()
 
-            # loss op
-            logits = self.forward(self._stories, self._queries) # (batch_size, vocab_size)
-            cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits, tf.cast(self._answers, tf.float32), name="xentropy")
-            loss_op = tf.reduce_sum(cross_entropy, name="loss_op")
+        # loss op
+        logits = self.forward(self._stories, self._queries) # (batch_size, vocab_size)
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits, tf.cast(self._answers, tf.float32), name="xentropy")
+        loss_op = tf.reduce_sum(cross_entropy, name="loss_op")
 
-            # training op
-            vars = self._g.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-            grads_and_vars = self._opt.compute_gradients(loss_op, vars)
-            clipped_grads_and_vars = [(tf.clip_by_norm(gv[0], self._clip_norm), gv[1]) for gv in grads_and_vars]
-            train_op = self._opt.apply_gradients(clipped_grads_and_vars, global_step=self.global_step, name="train_op")
+        # training op
+        vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        grads_and_vars = self._opt.compute_gradients(loss_op, vars)
+        clipped_grads_and_vars = [(tf.clip_by_norm(gv[0], self._clip_norm), gv[1]) for gv in grads_and_vars]
+        train_op = self._opt.apply_gradients(clipped_grads_and_vars, global_step=self.global_step, name="train_op")
 
-            # predict op
-            predict_op = tf.argmax(logits, 1, name="predict_op")
+        # predict op
+        predict_op = tf.argmax(logits, 1, name="predict_op")
 
-            self._loss_op = loss_op
-            self._predict_op = predict_op
-            self._train_op = train_op
+        self._loss_op = loss_op
+        self._predict_op = predict_op
+        self._train_op = train_op
 
-            init_op = tf.initialize_all_variables()
-            self._sess = session
-            sess.run(init_op)
+        init_op = tf.initialize_all_variables()
+        self._sess = session
+        self._sess.run(init_op)
             
     def build_inputs(self):
         self._stories = tf.placeholder(tf.int32, [None, self._memory_size, self._sentence_size], name="stories")
@@ -83,9 +79,10 @@ class MemN2N(object):
     def build_vars(self):
         # Embeddings
         nil_word_slot = tf.stop_gradient(tf.zeros([1, self._embedding_size]))
-        A = tf.concat(0, [ nil_word_slot, self._init(self._vocab_size-1, self._embedding_size) ])
-        B = tf.concat(0, [ nil_word_slot, self._init(self._vocab_size-1, self._embedding_size) ])
-        C = tf.concat(0, [ nil_word_slot, self._init(self._vocab_size-1, self._embedding_size) ])
+        A = tf.concat(0, [ nil_word_slot, self._init([self._vocab_size-1, self._embedding_size]) ])
+        B = tf.concat(0, [ nil_word_slot, self._init([self._vocab_size-1, self._embedding_size]) ])
+        C = tf.concat(0, [ nil_word_slot, self._init([self._vocab_size-1, self._embedding_size]) ])
+
         self.A = tf.Variable(A, name="A")
         self.B = tf.Variable(B, name="B")
         self.C = tf.Variable(C, name="C")
@@ -124,7 +121,7 @@ class MemN2N(object):
     def predict(self, stories, queries):
         feed_dict = {self._stories: stories, self._queries: queries}
         return self._sess.run(self._predict_op, feed_dict=feed_dict)
-        
+
     def forward(self, stories, queries):
         """
         A forward pass of the Memory Network.
@@ -132,13 +129,14 @@ class MemN2N(object):
         q_emb = tf.nn.embedding_lookup(self.B, queries)
         u_0 = tf.reduce_sum(q_emb * self.E, 1)
         inputs = [u_0]
-        for k in range(self.hops):
+        for k in range(self._hops):
             u_k = inputs[k]
             i_emb = tf.nn.embedding_lookup(self.A, stories)
             o_emb = tf.nn.embedding_lookup(self.C, stories)
             probs = self.input_module(i_emb, u_k)
             o_k = self.output_module(probs, o_emb)
-            u_k_next = tf.nn.relu(o_k + tf.matmul(u_k, self.H))
+            #u_k_next = tf.nn.relu(o_k + tf.matmul(u_k, self.H))
+            u_k_next = o_k + tf.matmul(u_k, self.H)
             inputs.append(u_k_next)
 
         out = tf.matmul(inputs[-1], self.W)

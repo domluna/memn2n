@@ -2,7 +2,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 from process_data import load_challenge, vectorize_data
-from sklearn.cross_validation import train_test_split
+from sklearn import cross_validation, metrics
 from memn2n.memn2n import MemN2N
 from itertools import chain
 
@@ -33,7 +33,7 @@ embedding_size = 40
 
 # train/validation/test sets
 S, Q, A = vectorize_data(train, word_idx, sentence_size, memory_size)
-trainS, valS, trainQ, valQ, trainA, valA = train_test_split(S, Q, A, test_size=.1, random_state=seed)
+trainS, valS, trainQ, valQ, trainA, valA = cross_validation.train_test_split(S, Q, A, test_size=.1, random_state=seed)
 testS, testQ, testA = vectorize_data(test, word_idx, sentence_size, memory_size)
 
 stories = tf.placeholder(tf.int32, [None, memory_size, sentence_size], name="stories")
@@ -46,31 +46,27 @@ print(valQ.shape)
 print(valA.shape)
 
 # params
-learning_rate = 1e-2
 epochs = 70
 n_data = trainS.shape[0]
 
 tf.set_random_seed(seed)
-model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size)
-
-# functions
-correct = model.predict()
-error_op = 1.0 - tf.reduce_mean(tf.cast(correct, tf.int32))
-pred_idxs = tf.argmax(pred, 1)
-target_idxs = tf.argmax(answer, 1)
 
 # summaries
-logdir = '/tmp/memn2n-logs'
-summary_validation_accuracy = tf.scalar_summary('validation_error', error_op)
-summary_validation_cost = tf.scalar_summary('validation_cost', cost)
-merged_summary_op = tf.merge_all_summaries()
+#logdir = '/tmp/memn2n-logs'
+#summary_validation_accuracy = tf.scalar_summary('validation_error', error_op)
+#summary_validation_cost = tf.scalar_summary('validation_cost', cost)
+#merged_summary_op = tf.merge_all_summaries()
+#summary_writer = tf.train.SummaryWriter(logdir, sess.graph_def)
 
 # numerics_op = tf.add_check_numerics_ops()
 # print(numerics_op)
 
+val_labels = np.argmax(valA, axis=1)
+
+#model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size)
 with tf.Session() as sess:
-    sess.run(tf.initialize_all_variables())
-    summary_writer = tf.train.SummaryWriter(logdir, sess.graph_def)
+    model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess)
+
     for t in range(epochs):
         total_cost = 0.0
         for start in range(0, batch_size, n_data):
@@ -78,27 +74,19 @@ with tf.Session() as sess:
             s = trainS[start:end]
             q = trainQ[start:end]
             a = trainA[start:end]
-            cost_t, _ = sess.run([cost, train_op], feed_dict={stories: s, query: q, answer: a})
+            cost_t = model.partial_fit(s, q, a)
             total_cost += cost_t
 
-        summary = sess.run(merged_summary_op, feed_dict={stories: valS, query: valQ, answer: valA})
-        summary_writer.add_summary(summary, t)
+        #summary = sess.run(merged_summary_op, feed_dict={stories: valS, query: valQ, answer: valA})
+        #summary_writer.add_summary(summary, t)
         # Cost
+
+        val_preds = model.predict(valS, valQ)
+        val_acc = metrics.accuracy_score(val_preds, val_labels)
         print('-----------------------')
         print('Epoch', t+1)
-        # print('Epoch {0}: Total Cost {1:.4f}'.format(i+1, total_cost))
-
-        # correct prediction
-        val_cost = sess.run(cost, feed_dict={stories: valS, query: valQ, answer: valA})
-        val_err = sess.run(error_op, feed_dict={stories: valS, query: valQ, answer: valA})
-        # train_err = sess.run(error_op, feed_dict={stories: trainS, query: trainQ, answer: trainA})
-        print('Validation Cost       {0:10.4f}'.format(val_cost))
-        print('Validation Error      {0:10.4f}'.format(val_err))
-        # print('Training  Error       {0:10.4f}'.format(train_err))
-
-        # print('Test Accuracy         {0:10.4f}'.format(test_acc))
-        # pi = sess.run(pred_idxs, feed_dict={stories: valS, query: valQ})
-        # ai = sess.run(target_idxs, feed_dict={answer: valA})
-        # print("Prediction Indices", pi)
-        # print("Target Indices", ai)
+        print('Total Cost:', total_cost)
+        print('Validation Accuracy:', val_acc)
+        print("Prediction Indices", val_preds)
+        print("Labels Indices", val_labels)
         print('-----------------------')
