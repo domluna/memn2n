@@ -33,7 +33,7 @@ embedding_size = 40
 
 # train/validation/test sets
 S, Q, A = vectorize_data(train, word_idx, sentence_size, memory_size)
-trainS, valS, trainQ, valQ, trainA, valA = train_test_split(S, Q, A, test_size=0.10, random_state=seed)
+trainS, valS, trainQ, valQ, trainA, valA = train_test_split(S, Q, A, test_size=.1, random_state=seed)
 testS, testQ, testA = vectorize_data(test, word_idx, sentence_size, memory_size)
 
 stories = tf.placeholder(tf.int32, [None, memory_size, sentence_size], name="stories")
@@ -54,10 +54,7 @@ tf.set_random_seed(seed)
 model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size)
 
 # functions
-pred = model(stories, query)
-cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(pred, tf.cast(answer, tf.float32)))
-train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
-correct = tf.nn.in_top_k(pred, answer, 1)
+correct = model.predict()
 error_op = 1.0 - tf.reduce_mean(tf.cast(correct, tf.int32))
 pred_idxs = tf.argmax(pred, 1)
 target_idxs = tf.argmax(answer, 1)

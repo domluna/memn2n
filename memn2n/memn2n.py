@@ -50,20 +50,37 @@ class MemN2N(object):
         self._g = g
         with self._g.as_default():
         
-            self._build_vars()
-            self._build_inputs()
-            
+            self.build_inputs()
+            self.build_vars()
+
+            # loss op
+            logits = self.forward(self._stories, self._queries) # (batch_size, vocab_size)
+            cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits, tf.cast(self._answers, tf.float32), name="xentropy")
+            loss_op = tf.reduce_sum(cross_entropy, name="loss_op")
+
+            # training op
+            vars = self._g.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            grads_and_vars = self._opt.compute_gradients(loss_op, vars)
+            clipped_grads_and_vars = [(tf.clip_by_norm(gv[0], self._clip_norm), gv[1]) for gv in grads_and_vars]
+            train_op = self._opt.apply_gradients(clipped_grads_and_vars, global_step=self.global_step, name="train_op")
+
+            # predict op
+            predict_op = tf.argmax(logits, 1, name="predict_op")
+
+            self._loss_op = loss_op
+            self._predict_op = predict_op
+            self._train_op = train_op
+
             init_op = tf.initialize_all_variables()
-            
             self._sess = session
             sess.run(init_op)
             
-    def _build_inputs(self):
-        self.stories = tf.placeholder(tf.int32, [None, self._memory_size, self._sentence_size], name="stories")
-        self.queries = tf.placeholder(tf.int32, [None, self._sentence_size], name="queries")
-        self.answers = tf.placeholder(tf.int32, [None, self._vocab_size], name="answers")
+    def build_inputs(self):
+        self._stories = tf.placeholder(tf.int32, [None, self._memory_size, self._sentence_size], name="stories")
+        self._queries = tf.placeholder(tf.int32, [None, self._sentence_size], name="queries")
+        self._answers = tf.placeholder(tf.int32, [None, self._vocab_size], name="answers")
         
-    def _build_vars(self):
+    def build_vars(self):
         # Embeddings
         nil_word_slot = tf.stop_gradient(tf.zeros([1, self._embedding_size]))
         A = tf.concat(0, [ nil_word_slot, self._init(self._vocab_size-1, self._embedding_size) ])
@@ -80,21 +97,38 @@ class MemN2N(object):
         # Postion Encoding from section 4.1 of [1]
         self.E = tf.constant(position_encoding(self._sentence_size, self._embedding_size), name="position_encoding")
         
+        # Global step used in training
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
         
-    def _update_params(self):
-        pass
-            
-    def fit(self):
-        pass
+    def fit(self, stories, queries, answers):
+        n_data = np.shape(stories)[0]
+        for t in range(self._epochs):
+            start = 0
+            total_loss = 0.0
+            for start in range(0, self._batch_size, n_data):
+                end = start + self_.batch_size
+                train_S = stories[start:end]
+                train_Q = queries[start:end]
+                train_A = answers[start:end]
+                feed_dict = {self._stories: train_S, self._queries: train_Q, self._answers: train_A}
+                loss_t, _ = self._sess.run([self._loss_op, self._train_op], feed_dict=feed_dict)
+                total_cost += loss_t
 
-    def partial_fit(self):
-        pass
+            print('Epoch %d: training loss %f', t+1, total_cost)
+
+    def partial_fit(self, stories, queries, answers):
+        feed_dict = {self._stories: stories, self._queries: queries, self._answers: answers}
+        loss_t, _ = self._sess.run([self._loss_op, self._train_op], feed_dict=feed_dict)
+        return loss_t
         
-    def predict(self):
-        pass
+    def predict(self, stories, queries):
+        feed_dict = {self._stories: stories, self._queries: queries}
+        return self._sess.run(self._predict_op, feed_dict=feed_dict)
         
-    def _inference(self):
+    def forward(self, stories, queries):
+        """
+        A forward pass of the Memory Network.
+        """
         q_emb = tf.nn.embedding_lookup(self.B, queries)
         u_0 = tf.reduce_sum(q_emb * self.E, 1)
         inputs = [u_0]
@@ -102,20 +136,16 @@ class MemN2N(object):
             u_k = inputs[k]
             i_emb = tf.nn.embedding_lookup(self.A, stories)
             o_emb = tf.nn.embedding_lookup(self.C, stories)
-            probs = self._input_module(i_emb, u_k)
-            o_k = self._output_module(probs, o_emb)
+            probs = self.input_module(i_emb, u_k)
+            o_k = self.output_module(probs, o_emb)
             u_k_next = tf.nn.relu(o_k + tf.matmul(u_k, self.H))
             inputs.append(u_k_next)
 
         out = tf.matmul(inputs[-1], self.W)
         return out
         
-    def _loss(self, logits, targets):
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits, targets, name="xentropy")
-        loss_func = tf.reduce_sum(cross_entropy, name="xentropy_sum")
-        return loss_func
 
-    def _input_module(self, i_emb, u):
+    def input_module(self, i_emb, u):
         # u -> (batch_size, embedding_size)
         # i_mem -> (batch_size, memory_size, embedding_size)
         # probs -> (batch_size, memory_size)
@@ -126,7 +156,7 @@ class MemN2N(object):
             dotted = tf.reduce_sum(i_mem * u_temp, 2)
             return tf.nn.softmax(dotted)
 
-    def _output_module(self, probs, o_emb):
+    def output_module(self, probs, o_emb):
         # probs -> (batch_size, memory_size)
         # o_mem -> (batch_size, memory_size, embedding_size)
         # o -> (batch_size, embedding_size)
