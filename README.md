@@ -1,11 +1,8 @@
 # memn2n
 
-Attempts to implement End-To-End Memory Networks using Tensorflow.
+WIP implementation of End-To-End Memory Networks with sklearn-like interface using Tensorflow.
 
-It's not currently working! However, it does properly converge on
-the correct set of words.
+It's not currently working! 
 
-## Goals
-
-1. Learn Tensorflow 
-2. sklearn-like interface
+The cost lowers but accuracy doesn't improve in relation. That's not how
+it's supposed to work!
