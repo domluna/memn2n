@@ -10,7 +10,7 @@ import tensorflow as tf
 import numpy as np
 
 # random seed
-seed = 1234
+seed = 33
 
 # challenge data
 dir_1k = "data/tasks_1-20_v1-2/en/"
@@ -46,8 +46,9 @@ print(valQ.shape)
 print(valA.shape)
 
 # params
-epochs = 70
-n_data = trainS.shape[0]
+epochs = 25
+n_train = trainS.shape[0]
+n_val = valS.shape[0]
 
 tf.set_random_seed(seed)
 
@@ -62,16 +63,13 @@ tf.set_random_seed(seed)
 # print(numerics_op)
 
 val_labels = np.argmax(valA, axis=1)
+train_labels = np.argmax(trainA, axis=1)
 
-print(len(word_idx))
-
-#model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size)
 with tf.Session() as sess:
     model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess)
-
     for t in range(epochs):
         total_cost = 0.0
-        for start in range(0, batch_size, n_data):
+        for start in range(0, n_train, batch_size):
             end = start + batch_size
             s = trainS[start:end]
             q = trainQ[start:end]
@@ -81,15 +79,31 @@ with tf.Session() as sess:
 
         #summary = sess.run(merged_summary_op, feed_dict={stories: valS, query: valQ, answer: valA})
         #summary_writer.add_summary(summary, t)
-        # Cost
 
-        val_preds = model.predict(valS, valQ)
-        val_acc = metrics.accuracy_score(val_preds, val_labels)
+        train_preds = []
+        for start in range(0, n_val, batch_size):
+            end = start + batch_size
+            s = trainS[start:end]
+            q = trainQ[start:end]
+            pred = model.predict(s, q)
+            train_preds += list(pred)
+
+        val_preds = []
+        for start in range(0, n_val, batch_size):
+            end = start + batch_size
+            s = valS[start:end]
+            q = valQ[start:end]
+            pred = model.predict(s, q)
+            val_preds += list(pred)
+
+        train_acc = metrics.accuracy_score(np.array(train_preds), train_labels)
+        val_acc = metrics.accuracy_score(np.array(val_preds), val_labels)
         print('-----------------------')
         print('Epoch', t+1)
         print('Total Cost:', total_cost)
+        print('Training Accuracy:', val_acc)
         print('Validation Accuracy:', val_acc)
-        print("Prediction Indices", val_preds)
-        print("Labels Indices", val_labels)
+        #print("Prediction Indices", val_preds)
+        #print("Labels Indices", val_labels)
         print('-----------------------')
 

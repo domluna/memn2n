@@ -135,8 +135,8 @@ class MemN2N(object):
             o_emb = tf.nn.embedding_lookup(self.C, stories)
             probs = self.input_module(i_emb, u_k)
             o_k = self.output_module(probs, o_emb)
-            #u_k_next = tf.nn.relu(o_k + tf.matmul(u_k, self.H))
-            u_k_next = o_k + tf.matmul(u_k, self.H)
+            u_k_next = tf.nn.relu(o_k + tf.matmul(u_k, self.H))
+            #u_k_next = o_k + tf.matmul(u_k, self.H)
             inputs.append(u_k_next)
 
         out = tf.matmul(inputs[-1], self.W)
