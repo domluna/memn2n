@@ -127,16 +127,16 @@ class MemN2N(object):
         A forward pass of the Memory Network.
         """
         q_emb = tf.nn.embedding_lookup(self.B, queries)
+        i_emb = tf.nn.embedding_lookup(self.A, stories)
+        o_emb = tf.nn.embedding_lookup(self.C, stories)
         u_0 = tf.reduce_sum(q_emb * self.E, 1)
         inputs = [u_0]
         for k in range(self._hops):
             u_k = inputs[k]
-            i_emb = tf.nn.embedding_lookup(self.A, stories)
-            o_emb = tf.nn.embedding_lookup(self.C, stories)
             probs = self.input_module(i_emb, u_k)
             o_k = self.output_module(probs, o_emb)
-            u_k_next = tf.nn.relu(o_k + tf.matmul(u_k, self.H))
-            #u_k_next = o_k + tf.matmul(u_k, self.H)
+            #u_k_next = tf.nn.relu(o_k + tf.matmul(u_k, self.H))
+            u_k_next = o_k + tf.matmul(u_k, self.H)
             inputs.append(u_k_next)
 
         out = tf.matmul(inputs[-1], self.W)

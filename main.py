@@ -10,7 +10,7 @@ import tensorflow as tf
 import numpy as np
 
 # random seed
-seed = 33
+seed = 1234
 
 # challenge data
 dir_1k = "data/tasks_1-20_v1-2/en/"
@@ -27,9 +27,9 @@ word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
 # print("max sentence length: {}, max story length: {}".format(sentence_size, story_maxlen))
 batch_size = 32
 vocab_size = len(word_idx) + 1
-sentence_size = 30
+sentence_size = 25
 memory_size = 50
-embedding_size = 40
+embedding_size = 20
 
 # train/validation/test sets
 S, Q, A = vectorize_data(train, word_idx, sentence_size, memory_size)
@@ -40,10 +40,10 @@ stories = tf.placeholder(tf.int32, [None, memory_size, sentence_size], name="sto
 query = tf.placeholder(tf.int32, [None, sentence_size], name="query")
 answer = tf.placeholder(tf.int32, [None, vocab_size], name="answer")
 
-print(S.shape)
-print(valS.shape)
-print(valQ.shape)
-print(valA.shape)
+#print(S.shape)
+#print(valS.shape)
+#print(valQ.shape)
+#print(valA.shape)
 
 # params
 epochs = 25
@@ -81,7 +81,7 @@ with tf.Session() as sess:
         #summary_writer.add_summary(summary, t)
 
         train_preds = []
-        for start in range(0, n_val, batch_size):
+        for start in range(0, n_train, batch_size):
             end = start + batch_size
             s = trainS[start:end]
             q = trainQ[start:end]
@@ -101,7 +101,7 @@ with tf.Session() as sess:
         print('-----------------------')
         print('Epoch', t+1)
         print('Total Cost:', total_cost)
-        print('Training Accuracy:', val_acc)
+        print('Training Accuracy:', train_acc)
         print('Validation Accuracy:', val_acc)
         #print("Prediction Indices", val_preds)
         #print("Labels Indices", val_labels)
