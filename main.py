@@ -10,7 +10,7 @@ import tensorflow as tf
 import numpy as np
 
 # random seed
-seed = 1234
+#seed = 1234
 
 # challenge data
 dir_1k = "data/tasks_1-20_v1-2/en/"
@@ -33,7 +33,8 @@ embedding_size = 20
 
 # train/validation/test sets
 S, Q, A = vectorize_data(train, word_idx, sentence_size, memory_size)
-trainS, valS, trainQ, valQ, trainA, valA = cross_validation.train_test_split(S, Q, A, test_size=.1, random_state=seed)
+#trainS, valS, trainQ, valQ, trainA, valA = cross_validation.train_test_split(S, Q, A, test_size=.1, random_state=seed)
+trainS, valS, trainQ, valQ, trainA, valA = cross_validation.train_test_split(S, Q, A, test_size=.1)
 testS, testQ, testA = vectorize_data(test, word_idx, sentence_size, memory_size)
 
 stories = tf.placeholder(tf.int32, [None, memory_size, sentence_size], name="stories")
@@ -46,11 +47,11 @@ answer = tf.placeholder(tf.int32, [None, vocab_size], name="answer")
 #print(valA.shape)
 
 # params
-epochs = 25
+epochs = 100
 n_train = trainS.shape[0]
 n_val = valS.shape[0]
 
-tf.set_random_seed(seed)
+#tf.set_random_seed(seed)
 
 # summaries
 #logdir = '/tmp/memn2n-logs'
@@ -96,14 +97,21 @@ with tf.Session() as sess:
             pred = model.predict(s, q)
             val_preds += list(pred)
 
+
+        train_preds_nil = np.sum(train_preds == 0)
+        val_preds_nil = np.sum(val_preds == 0)
+
         train_acc = metrics.accuracy_score(np.array(train_preds), train_labels)
         val_acc = metrics.accuracy_score(np.array(val_preds), val_labels)
+
         print('-----------------------')
         print('Epoch', t+1)
         print('Total Cost:', total_cost)
         print('Training Accuracy:', train_acc)
         print('Validation Accuracy:', val_acc)
-        #print("Prediction Indices", val_preds)
-        #print("Labels Indices", val_labels)
+        print('Training Nil Predictions:', train_preds_nil)
+        print('Validation Nil Predictions:', val_preds_nil)
+        #print("Validation Prediction Indices", val_preds)
+        #print("Validation Labels Indices", val_labels)
         print('-----------------------')
 

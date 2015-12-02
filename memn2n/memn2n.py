@@ -93,9 +93,19 @@ class MemN2N(object):
 
         # Postion Encoding from section 4.1 of [1]
         self.E = tf.constant(position_encoding(self._sentence_size, self._embedding_size), name="position_encoding")
-        
+
         # Global step used in training
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
+
+    def reset_nil_embedding(self):
+        nil_word_slot = tf.zeros([1, self._embedding_size])
+        A = tf.concat(0, [nil_word_slot, tf.slice(self.A, [1, 0], [-1, -1])])
+        B = tf.concat(0, [nil_word_slot, tf.slice(self.B, [1, 0], [-1, -1])])
+        C = tf.concat(0, [nil_word_slot, tf.slice(self.C, [1, 0], [-1, -1])])
+        tf.assign(self.A, A)
+        tf.assign(self.B, B)
+        tf.assign(self.C, C)
+        
         
     def fit(self, stories, queries, answers):
         n_data = np.shape(stories)[0]
@@ -137,9 +147,11 @@ class MemN2N(object):
             o_k = self.output_module(probs, o_emb)
             #u_k_next = tf.nn.relu(o_k + tf.matmul(u_k, self.H))
             u_k_next = o_k + tf.matmul(u_k, self.H)
+            #u_k_next = o_k + u_k
             inputs.append(u_k_next)
 
         out = tf.matmul(inputs[-1], self.W)
+        #self.reset_nil_embedding()
         return out
         
 
