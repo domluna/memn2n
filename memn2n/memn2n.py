@@ -151,9 +151,10 @@ class MemN2N(object):
             inputs.append(u_k_next)
 
         out = tf.matmul(inputs[-1], self.W)
+        #out = tf.Print(out, [tf.slice(t, [0, 0], [1, -1]) for t in [self.A, self.B, self.C]], message="before nil embeddings")
         with tf.control_dependencies([out]):
             out = self.reset_nil_embedding(out)
-        out = tf.Print(out, [tf.slice(t, [0, 0], [2, -1]) for t in [self.A, self.B, self.C]], message="nil embeddings")
+        #out = tf.Print(out, [tf.slice(t, [0, 0], [1, -1]) for t in [self.A, self.B, self.C]], message="after nil embeddings")
         return out
         
 

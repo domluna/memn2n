@@ -9,7 +9,7 @@ from itertools import chain
 import tensorflow as tf
 import numpy as np
 
-challenge_n = 1
+challenge_n = 8
 
 print("Started Challenge:", challenge_n)
 
@@ -30,7 +30,7 @@ batch_size = 32
 vocab_size = len(word_idx) + 1
 sentence_size = 20
 memory_size = 50
-embedding_size = 40
+embedding_size = 20
 
 # train/validation/test sets
 S, Q, A = vectorize_data(train, word_idx, sentence_size, memory_size)
@@ -41,17 +41,14 @@ stories = tf.placeholder(tf.int32, [None, memory_size, sentence_size], name="sto
 query = tf.placeholder(tf.int32, [None, sentence_size], name="query")
 answer = tf.placeholder(tf.int32, [None, vocab_size], name="answer")
 
-#print(S.shape)
-#print(valS.shape)
-#print(valQ.shape)
-#print(valA.shape)
-
 # params
 epochs = 100
 n_train = trainS.shape[0]
+n_test = testS.shape[0]
 n_val = valS.shape[0]
 
 print("Training Size", n_train)
+print("Testing Size", n_test)
 print("Validation Size", n_val)
 
 # summaries
@@ -61,14 +58,12 @@ print("Validation Size", n_val)
 #merged_summary_op = tf.merge_all_summaries()
 #summary_writer = tf.train.SummaryWriter(logdir, sess.graph_def)
 
-# numerics_op = tf.add_check_numerics_ops()
-# print(numerics_op)
-
-val_labels = np.argmax(valA, axis=1)
 train_labels = np.argmax(trainA, axis=1)
+test_labels = np.argmax(testA, axis=1)
+val_labels = np.argmax(valA, axis=1)
 
 with tf.Session() as sess:
-    model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess, hops=3)
+    model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess, hops=1)
     for t in range(epochs):
         total_cost = 0.0
         for start in range(0, n_train, batch_size):
@@ -90,29 +85,20 @@ with tf.Session() as sess:
             pred = model.predict(s, q)
             train_preds += list(pred)
 
-        val_preds = []
-        for start in range(0, n_val, batch_size):
-            end = start + batch_size
-            s = valS[start:end]
-            q = valQ[start:end]
-            pred = model.predict(s, q)
-            val_preds += list(pred)
-
-
-        train_preds_nil = np.sum(train_preds == 0)
-        val_preds_nil = np.sum(val_preds == 0)
-
+        val_preds = model.predict(valS, valQ)
         train_acc = metrics.accuracy_score(np.array(train_preds), train_labels)
-        val_acc = metrics.accuracy_score(np.array(val_preds), val_labels)
+        val_acc = metrics.accuracy_score(val_preds, val_labels)
 
         print('-----------------------')
         print('Epoch', t+1)
         print('Total Cost:', total_cost)
         print('Training Accuracy:', train_acc)
         print('Validation Accuracy:', val_acc)
-        print('Training Nil Predictions:', train_preds_nil)
-        print('Validation Nil Predictions:', val_preds_nil)
         #print("Validation Prediction Indices", val_preds)
         #print("Validation Labels Indices", val_labels)
         print('-----------------------')
+
+    test_preds = model.predict(testS, testQ)
+    test_acc = metrics.accuracy_score(test_preds, test_labels)
+    print("Testing Accuracy:", test_acc)
 
