@@ -13,3 +13,4 @@ Currently doing a bunch of experiments but initial results look nice.
 
 * Linear start - don't do softmax on the probabilities at first
 * Adjacent sharing
+* Temporal Encoding

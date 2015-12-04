@@ -26,7 +26,7 @@ class MemN2N(object):
     def __init__(self, batch_size, vocab_size, sentence_size,
         memory_size,
         embedding_size,
-        hops=3,
+        hops=1,
         clip_norm=40,
         epochs=20,
         initializer=tf.random_normal_initializer(stddev=0.1),
@@ -57,6 +57,7 @@ class MemN2N(object):
         # training op
         vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
         grads_and_vars = self._opt.compute_gradients(loss_op, vars)
+        #print([(g, v.name) for g,v in grads_and_vars])
         clipped_grads_and_vars = [(tf.clip_by_norm(gv[0], self._clip_norm), gv[1]) for gv in grads_and_vars]
         train_op = self._opt.apply_gradients(clipped_grads_and_vars, global_step=self.global_step, name="train_op")
 
@@ -97,14 +98,15 @@ class MemN2N(object):
         # Global step used in training
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
-    def reset_nil_embedding(self):
+    def reset_nil_embedding(self, _input):
         nil_word_slot = tf.zeros([1, self._embedding_size])
         A = tf.concat(0, [nil_word_slot, tf.slice(self.A, [1, 0], [-1, -1])])
         B = tf.concat(0, [nil_word_slot, tf.slice(self.B, [1, 0], [-1, -1])])
         C = tf.concat(0, [nil_word_slot, tf.slice(self.C, [1, 0], [-1, -1])])
-        tf.assign(self.A, A)
-        tf.assign(self.B, B)
-        tf.assign(self.C, C)
+        self.A = tf.assign(self.A, A)
+        self.B = tf.assign(self.B, B)
+        self.C = tf.assign(self.C, C)
+        return _input
         
         
     def fit(self, stories, queries, answers):
@@ -145,13 +147,13 @@ class MemN2N(object):
             u_k = inputs[k]
             probs = self.input_module(i_emb, u_k)
             o_k = self.output_module(probs, o_emb)
-            #u_k_next = tf.nn.relu(o_k + tf.matmul(u_k, self.H))
             u_k_next = o_k + tf.matmul(u_k, self.H)
-            #u_k_next = o_k + u_k
             inputs.append(u_k_next)
 
         out = tf.matmul(inputs[-1], self.W)
-        #self.reset_nil_embedding()
+        with tf.control_dependencies([out]):
+            out = self.reset_nil_embedding(out)
+        out = tf.Print(out, [tf.slice(t, [0, 0], [2, -1]) for t in [self.A, self.B, self.C]], message="nil embeddings")
         return out
         
 

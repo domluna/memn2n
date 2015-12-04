@@ -9,13 +9,14 @@ from itertools import chain
 import tensorflow as tf
 import numpy as np
 
-# random seed
-#seed = 1234
+challenge_n = 1
+
+print("Started Challenge:", challenge_n)
 
 # challenge data
 dir_1k = "data/tasks_1-20_v1-2/en/"
 dir_10k = "data/tasks_1-20_v1-2/en-10k/"
-train, test = load_challenge(dir_1k, 1)
+train, test = load_challenge(dir_1k, challenge_n)
 
 vocab = sorted(reduce(lambda x, y: x | y, (set(list(chain.from_iterable(s)) + q + a) for s, q, a in train + test)))
 word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
@@ -27,13 +28,12 @@ word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
 # print("max sentence length: {}, max story length: {}".format(sentence_size, story_maxlen))
 batch_size = 32
 vocab_size = len(word_idx) + 1
-sentence_size = 25
+sentence_size = 20
 memory_size = 50
-embedding_size = 20
+embedding_size = 40
 
 # train/validation/test sets
 S, Q, A = vectorize_data(train, word_idx, sentence_size, memory_size)
-#trainS, valS, trainQ, valQ, trainA, valA = cross_validation.train_test_split(S, Q, A, test_size=.1, random_state=seed)
 trainS, valS, trainQ, valQ, trainA, valA = cross_validation.train_test_split(S, Q, A, test_size=.1)
 testS, testQ, testA = vectorize_data(test, word_idx, sentence_size, memory_size)
 
@@ -51,7 +51,8 @@ epochs = 100
 n_train = trainS.shape[0]
 n_val = valS.shape[0]
 
-#tf.set_random_seed(seed)
+print("Training Size", n_train)
+print("Validation Size", n_val)
 
 # summaries
 #logdir = '/tmp/memn2n-logs'
@@ -67,7 +68,7 @@ val_labels = np.argmax(valA, axis=1)
 train_labels = np.argmax(trainA, axis=1)
 
 with tf.Session() as sess:
-    model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess)
+    model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess, hops=3)
     for t in range(epochs):
         total_cost = 0.0
         for start in range(0, n_train, batch_size):
