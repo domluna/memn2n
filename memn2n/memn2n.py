@@ -16,8 +16,22 @@ def position_encoding(sentence_size, embedding_size):
     E = 1 + 4 * E / le / ls
     return np.transpose(E)
 
-# TODO: make it so the nil part of the embedding matrices is 0 at all times
-# This seems kind of hacky -> see if there's a better way
+def zero_nil_slot(t, name=None):
+    with tf.op_scope([t], name, "zero_nil_slot") as name:
+        t = tf.convert_to_tensor(t, name="t")
+        #s = tf.shape(t)[1]
+        z = tf.zeros([1, 20])
+        return tf.concat(0, [z, tf.slice(t, [1, 0], [-1, -1])], name=name)
+
+# TODO: change this to not be magic number
+# from paper: variance = n / (1 + t)^v, n = {0.01, 0.3, 1.0}, v = 0.55
+# training step t
+def add_gradient_noise(t, stddev, name=None):
+    with tf.op_scope([t, stddev], name, "add_gradient_noise") as name:
+        t = tf.convert_to_tensor(t, name="t")
+        gn = tf.random_normal(tf.shape(t), stddev=stddev)
+        return tf.add(t, gn, name=name)
+
 class MemN2N(object):
     """
     End-To-End Memory Network as described in [1].
@@ -28,7 +42,7 @@ class MemN2N(object):
         embedding_size,
         hops=1,
         clip_norm=40,
-        epochs=20,
+        epochs=100,
         initializer=tf.random_normal_initializer(stddev=0.1),
         optimizer=tf.train.AdamOptimizer(learning_rate=1e-2),
         session=tf.Session(),
@@ -57,9 +71,11 @@ class MemN2N(object):
         # training op
         vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
         grads_and_vars = self._opt.compute_gradients(loss_op, vars)
-        #print([(g, v.name) for g,v in grads_and_vars])
         clipped_grads_and_vars = [(tf.clip_by_norm(gv[0], self._clip_norm), gv[1]) for gv in grads_and_vars]
-        train_op = self._opt.apply_gradients(clipped_grads_and_vars, global_step=self.global_step, name="train_op")
+        zeroed_nil_grads_and_vars = [(zero_nil_slot(gv[0]), gv[1]) for gv in clipped_grads_and_vars]
+        #noised_grads_and_vars = [(add_gradient_noise(gv[0], 0.1), gv[1]) for gv in grads_and_vars]
+        #train_op = self._opt.apply_gradients(noised_grads_and_vars, global_step=self.global_step, name="train_op")
+        train_op = self._opt.apply_gradients(zeroed_nil_grads_and_vars, global_step=self.global_step, name="train_op")
 
         # predict op
         predict_op = tf.argmax(logits, 1, name="predict_op")
@@ -71,7 +87,7 @@ class MemN2N(object):
         init_op = tf.initialize_all_variables()
         self._sess = session
         self._sess.run(init_op)
-            
+
     def build_inputs(self):
         self._stories = tf.placeholder(tf.int32, [None, self._memory_size, self._sentence_size], name="stories")
         self._queries = tf.placeholder(tf.int32, [None, self._sentence_size], name="queries")
@@ -98,17 +114,6 @@ class MemN2N(object):
         # Global step used in training
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
-    def reset_nil_embedding(self, _input):
-        nil_word_slot = tf.zeros([1, self._embedding_size])
-        A = tf.concat(0, [nil_word_slot, tf.slice(self.A, [1, 0], [-1, -1])])
-        B = tf.concat(0, [nil_word_slot, tf.slice(self.B, [1, 0], [-1, -1])])
-        C = tf.concat(0, [nil_word_slot, tf.slice(self.C, [1, 0], [-1, -1])])
-        self.A = tf.assign(self.A, A)
-        self.B = tf.assign(self.B, B)
-        self.C = tf.assign(self.C, C)
-        return _input
-        
-        
     def fit(self, stories, queries, answers):
         n_data = np.shape(stories)[0]
         for t in range(self._epochs):
@@ -139,22 +144,16 @@ class MemN2N(object):
         A forward pass of the Memory Network.
         """
         q_emb = tf.nn.embedding_lookup(self.B, queries)
-        i_emb = tf.nn.embedding_lookup(self.A, stories)
-        o_emb = tf.nn.embedding_lookup(self.C, stories)
-        u_0 = tf.reduce_sum(q_emb * self.E, 1)
-        inputs = [u_0]
+        u_k = tf.reduce_sum(q_emb * self.E, 1)
         for k in range(self._hops):
-            u_k = inputs[k]
+            i_emb = tf.nn.embedding_lookup(self.A, stories)
+            o_emb = tf.nn.embedding_lookup(self.C, stories)
             probs = self.input_module(i_emb, u_k)
             o_k = self.output_module(probs, o_emb)
-            u_k_next = o_k + tf.matmul(u_k, self.H)
-            inputs.append(u_k_next)
+            u_k = o_k + tf.matmul(u_k, self.H)
 
-        out = tf.matmul(inputs[-1], self.W)
+        out = tf.matmul(u_k, self.W)
         #out = tf.Print(out, [tf.slice(t, [0, 0], [1, -1]) for t in [self.A, self.B, self.C]], message="before nil embeddings")
-        with tf.control_dependencies([out]):
-            out = self.reset_nil_embedding(out)
-        #out = tf.Print(out, [tf.slice(t, [0, 0], [1, -1]) for t in [self.A, self.B, self.C]], message="after nil embeddings")
         return out
         
 

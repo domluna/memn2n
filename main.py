@@ -9,7 +9,7 @@ from itertools import chain
 import tensorflow as tf
 import numpy as np
 
-challenge_n = 8
+challenge_n = 1
 
 print("Started Challenge:", challenge_n)
 
@@ -21,14 +21,10 @@ train, test = load_challenge(dir_1k, challenge_n)
 vocab = sorted(reduce(lambda x, y: x | y, (set(list(chain.from_iterable(s)) + q + a) for s, q, a in train + test)))
 word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
 
-# sentence_size = 0
-# story_maxlen = 0
-# sentence_size = max(map(len, chain.from_iterable(x for x, _, _ in train + test)))
-# story_maxlen = max(map(len, (x for x, _, _ in train + test)))
-# print("max sentence length: {}, max story length: {}".format(sentence_size, story_maxlen))
 batch_size = 32
 vocab_size = len(word_idx) + 1
-sentence_size = 20
+#sentence_size = 20
+sentence_size = max(map(len, chain.from_iterable(x for x, _, _ in train + test)))
 memory_size = 50
 embedding_size = 20
 
