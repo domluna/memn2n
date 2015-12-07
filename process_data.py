@@ -16,10 +16,9 @@ def load_challenge(data_dir, n, only_supporting=False):
     s = 'qa{}_'
     train_file = [f for f in files if s.format(n) in f and 'train' in f][0]
     test_file = [f for f in files if s.format(n) in f and 'test' in f][0]
-
     train_data = get_stories(train_file, only_supporting)
     test_data = get_stories(test_file, only_supporting)
-
+    print(train_file, test_file)
     return train_data, test_data
 
 def tokenize(sent):

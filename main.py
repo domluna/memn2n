@@ -23,10 +23,13 @@ word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
 
 batch_size = 32
 vocab_size = len(word_idx) + 1
-#sentence_size = 20
-sentence_size = max(map(len, chain.from_iterable(x for x, _, _ in train + test)))
+sentence_size = max(map(len, chain.from_iterable(s for s, _, _ in train + test)))
+query_size = max(map(len, chain.from_iterable(q for _, q, _ in train + test)))
+sentence_size = max(query_size, sentence_size)
 memory_size = 50
 embedding_size = 20
+
+print("Sentence size", sentence_size)
 
 # train/validation/test sets
 S, Q, A = vectorize_data(train, word_idx, sentence_size, memory_size)
@@ -59,7 +62,8 @@ test_labels = np.argmax(testA, axis=1)
 val_labels = np.argmax(valA, axis=1)
 
 with tf.Session() as sess:
-    model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess, hops=1)
+    model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess, hops=3,
+                   optimizer=tf.train.AdamOptimizer(learning_rate=1e-3))
     for t in range(epochs):
         total_cost = 0.0
         for start in range(0, n_train, batch_size):

@@ -71,11 +71,15 @@ class MemN2N(object):
         # training op
         vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
         grads_and_vars = self._opt.compute_gradients(loss_op, vars)
-        clipped_grads_and_vars = [(tf.clip_by_norm(gv[0], self._clip_norm), gv[1]) for gv in grads_and_vars]
-        zeroed_nil_grads_and_vars = [(zero_nil_slot(gv[0]), gv[1]) for gv in clipped_grads_and_vars]
-        #noised_grads_and_vars = [(add_gradient_noise(gv[0], 0.1), gv[1]) for gv in grads_and_vars]
-        #train_op = self._opt.apply_gradients(noised_grads_and_vars, global_step=self.global_step, name="train_op")
-        train_op = self._opt.apply_gradients(zeroed_nil_grads_and_vars, global_step=self.global_step, name="train_op")
+        nil_grads_and_vars = []
+        for g, v in grads_and_vars:
+            if v.name == self.A.name or v.name == self.B.name or v.name == self.C.name:
+                nil_grads_and_vars.append((zero_nil_slot(g), v))
+            else:
+                nil_grads_and_vars.append((g, v))
+        clipped_grads_and_vars = [(tf.clip_by_norm(gv[0], self._clip_norm), gv[1]) for gv in nil_grads_and_vars]
+        noised_grads_and_vars = [(add_gradient_noise(gv[0], 0.1), gv[1]) for gv in clipped_grads_and_vars]
+        train_op = self._opt.apply_gradients(nil_grads_and_vars, global_step=self.global_step, name="train_op")
 
         # predict op
         predict_op = tf.argmax(logits, 1, name="predict_op")
@@ -156,7 +160,6 @@ class MemN2N(object):
         #out = tf.Print(out, [tf.slice(t, [0, 0], [1, -1]) for t in [self.A, self.B, self.C]], message="before nil embeddings")
         return out
         
-
     def input_module(self, i_emb, u):
         # u -> (batch_size, embedding_size)
         # i_mem -> (batch_size, memory_size, embedding_size)
