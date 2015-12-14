@@ -9,61 +9,56 @@ from itertools import chain
 import tensorflow as tf
 import numpy as np
 
-challenge_n = 1
-
+seed = 1234
+challenge_n = 3
 print("Started Challenge:", challenge_n)
 
 # challenge data
-dir_1k = "data/tasks_1-20_v1-2/en/"
-dir_10k = "data/tasks_1-20_v1-2/en-10k/"
-train, test = load_challenge(dir_1k, challenge_n)
+data_dir = "data/tasks_1-20_v1-2/en/"
+train, test = load_challenge(data_dir, challenge_n)
 
 vocab = sorted(reduce(lambda x, y: x | y, (set(list(chain.from_iterable(s)) + q + a) for s, q, a in train + test)))
 word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
 
 batch_size = 32
 vocab_size = len(word_idx) + 1
+max_story_size = max(map(len, (s for s, _, _ in train + test)))
+mean_story_size = int(np.mean(map(len, (s for s, _, _ in train + test))))
 sentence_size = max(map(len, chain.from_iterable(s for s, _, _ in train + test)))
 query_size = max(map(len, chain.from_iterable(q for _, q, _ in train + test)))
 sentence_size = max(query_size, sentence_size)
-memory_size = 50
+memory_size = min(50, mean_story_size)
 embedding_size = 20
 
-print("Sentence size", sentence_size)
+print("Longest sentence length", sentence_size)
+print("Longest story length", max_story_size)
+print("Average story length", mean_story_size)
 
 # train/validation/test sets
 S, Q, A = vectorize_data(train, word_idx, sentence_size, memory_size)
-trainS, valS, trainQ, valQ, trainA, valA = cross_validation.train_test_split(S, Q, A, test_size=.1)
+trainS, valS, trainQ, valQ, trainA, valA = cross_validation.train_test_split(S, Q, A, test_size=.1, random_state=seed)
 testS, testQ, testA = vectorize_data(test, word_idx, sentence_size, memory_size)
 
-stories = tf.placeholder(tf.int32, [None, memory_size, sentence_size], name="stories")
-query = tf.placeholder(tf.int32, [None, sentence_size], name="query")
-answer = tf.placeholder(tf.int32, [None, vocab_size], name="answer")
+print(trainS.shape)
 
 # params
-epochs = 100
+epochs = 200
 n_train = trainS.shape[0]
 n_test = testS.shape[0]
 n_val = valS.shape[0]
 
 print("Training Size", n_train)
-print("Testing Size", n_test)
 print("Validation Size", n_val)
-
-# summaries
-#logdir = '/tmp/memn2n-logs'
-#summary_validation_accuracy = tf.scalar_summary('validation_error', error_op)
-#summary_validation_cost = tf.scalar_summary('validation_cost', cost)
-#merged_summary_op = tf.merge_all_summaries()
-#summary_writer = tf.train.SummaryWriter(logdir, sess.graph_def)
+print("Testing Size", n_test)
 
 train_labels = np.argmax(trainA, axis=1)
 test_labels = np.argmax(testA, axis=1)
 val_labels = np.argmax(valA, axis=1)
 
+tf.set_random_seed(seed)
+
 with tf.Session() as sess:
-    model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess, hops=3,
-                   optimizer=tf.train.AdamOptimizer(learning_rate=1e-3))
+    model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, embedding_size, session=sess, hops=3)
     for t in range(epochs):
         total_cost = 0.0
         for start in range(0, n_train, batch_size):
@@ -71,11 +66,8 @@ with tf.Session() as sess:
             s = trainS[start:end]
             q = trainQ[start:end]
             a = trainA[start:end]
-            cost_t = model.partial_fit(s, q, a)
+            cost_t = model.batch_fit(s, q, a)
             total_cost += cost_t
-
-        #summary = sess.run(merged_summary_op, feed_dict={stories: valS, query: valQ, answer: valA})
-        #summary_writer.add_summary(summary, t)
 
         train_preds = []
         for start in range(0, n_train, batch_size):
@@ -94,8 +86,6 @@ with tf.Session() as sess:
         print('Total Cost:', total_cost)
         print('Training Accuracy:', train_acc)
         print('Validation Accuracy:', val_acc)
-        #print("Validation Prediction Indices", val_preds)
-        #print("Validation Labels Indices", val_labels)
         print('-----------------------')
 
     test_preds = model.predict(testS, testQ)
