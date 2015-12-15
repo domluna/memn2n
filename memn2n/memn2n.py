@@ -53,6 +53,7 @@ def add_gradient_noise(t, stddev, name=None):
         return tf.add(t, gn, name=name)
 
 class MemN2N(object):
+    """End-To-End Memory Network."""
     def __init__(self, batch_size, vocab_size, sentence_size, memory_size, embedding_size,
         hops=1,
         clip_norm=40.0,
@@ -83,6 +84,7 @@ class MemN2N(object):
         cross_entropy_sum = tf.reduce_sum(cross_entropy, name="cross_entropy_sum")
         tf.add_to_collection('losses', cross_entropy_sum)
         #loss_op = tf.add_n(tf.get_collection('losses'), name='loss_op')
+        print([l for l in tf.get_collection('losses')])
         loss_op = cross_entropy_sum 
 
         # training op
@@ -103,6 +105,7 @@ class MemN2N(object):
         predict_proba_op = tf.nn.softmax(logits, name="predict_proba_op")
         predict_log_proba_op = tf.log(predict_proba_op, name="predict_log_proba_op")
 
+        # assign ops
         self.loss_op = loss_op
         self.predict_op = predict_op
         self.predict_proba_op = predict_proba_op
@@ -132,11 +135,11 @@ class MemN2N(object):
                 self.H = tf.Variable(self._init([self._embedding_size, self._embedding_size]), name="H")
                 self.W = tf.Variable(self._init([self._embedding_size, self._vocab_size]), name="W")
 
-            tf.add_to_collection('losses', tf.nn.l2_loss(self.A))
-            tf.add_to_collection('losses', tf.nn.l2_loss(self.B))
-            tf.add_to_collection('losses', tf.nn.l2_loss(self.C))
-            tf.add_to_collection('losses', tf.nn.l2_loss(self.W))
-            tf.add_to_collection('losses', tf.nn.l2_loss(self.H))
+            tf.add_to_collection('losses', tf.nn.l2_loss(self.A, name="L2_loss_A"))
+            tf.add_to_collection('losses', tf.nn.l2_loss(self.B, name="L2_loss_B"))
+            tf.add_to_collection('losses', tf.nn.l2_loss(self.C, name="L2_loss_C"))
+            tf.add_to_collection('losses', tf.nn.l2_loss(self.W, name="L2_loss_W"))
+            tf.add_to_collection('losses', tf.nn.l2_loss(self.H, name="L2_loss_H"))
 
     def _inference(self, stories, queries):
         with tf.name_scope("inference"):
@@ -177,19 +180,72 @@ class MemN2N(object):
             return tf.reduce_sum(o_mem_temp * probs_temp, 2)
 
     def batch_fit(self, stories, queries, answers):
+        """Runs the training algorithm over the passed batch
+
+        Inputs
+        ------
+
+        stories: Tensor (None, memory_size, sentence_size)
+        queries: Tensor (None, sentence_size)
+        answers: Tensor (None, vocab_size)
+
+        Returns
+        -------
+
+        loss: floating-point number, the loss computed for the batch
+
+        """
         feed_dict = {self._stories: stories, self._queries: queries, self._answers: answers}
-        loss_t, _ = self._sess.run([self.loss_op, self.train_op], feed_dict=feed_dict)
-        return loss_t
+        loss, _ = self._sess.run([self.loss_op, self.train_op], feed_dict=feed_dict)
+        return loss
         
     def predict(self, stories, queries):
+        """Predicts answers as one-hot encoding.
+
+        Inputs
+        ------
+
+        stories: Tensor (None, memory_size, sentence_size)
+        queries: Tensor (None, sentence_size)
+
+        Returns
+        -------
+
+        answers: Tensor (None, vocab_size)
+        """
         feed_dict = {self._stories: stories, self._queries: queries}
         return self._sess.run(self.predict_op, feed_dict=feed_dict)
 
-    def predict_log_proba(self, stories, queries):
-        feed_dict = {self._stories: stories, self._queries: queries}
-        return self._sess.run(self.predict_log_proba_op, feed_dict=feed_dict)
-
     def predict_proba(self, stories, queries):
+        """Predicts probabilities of answers.
+
+        Inputs
+        ------
+
+        stories: Tensor (None, memory_size, sentence_size)
+        queries: Tensor (None, sentence_size)
+
+        Returns
+        -------
+
+        answers: Tensor (None, vocab_size)
+        """
         feed_dict = {self._stories: stories, self._queries: queries}
         return self._sess.run(self.predict_proba_op, feed_dict=feed_dict)
 
+    def predict_log_proba(self, stories, queries):
+        """Predicts log probabilities of answers.
+
+        Inputs
+        ------
+
+        stories: Tensor (None, memory_size, sentence_size)
+        queries: Tensor (None, sentence_size)
+
+        Returns
+        -------
+
+        answers: Tensor (None, vocab_size)
+        """
+        feed_dict = {self._stories: stories, self._queries: queries}
+        return self._sess.run(self.predict_log_proba_op, feed_dict=feed_dict)

@@ -1,3 +1,6 @@
+"""Example running MemN2N on a single BaBI task.
+Download taks from http://www.thespermwhale.com/jaseweston/babi/tasks_1-20_v1-2.tar.gz
+and place it in the data directory."""
 from __future__ import absolute_import
 from __future__ import print_function
 
