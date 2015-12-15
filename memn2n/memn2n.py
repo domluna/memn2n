@@ -1,3 +1,6 @@
+"""End-To-End Memory Networks.
+The implementation comes from http://arxiv.org/abs/1503.08895 [1]"""
+
 from __future__ import absolute_import
 from __future__ import division
 
@@ -10,17 +13,16 @@ def bag_of_words_encoding(sentence_size, embedding_size):
 
 def position_encoding(sentence_size, embedding_size):
     """ 
-    Position Encoding described in section 4.1
-    of http://arxiv.org/abs/1503.08895.
+    Position Encoding described in section 4.1 [1]
     """
-    E = np.ones((embedding_size, sentence_size), dtype=np.float32)
+    encoding = np.ones((embedding_size, sentence_size), dtype=np.float32)
     ls = sentence_size+1
     le = embedding_size+1
     for i in range(1, le):
         for j in range(1, ls):
-            E[i-1, j-1] = (i - le / 2) * (j - ls / 2)
-    E = 1 + 4 * E / le / ls
-    return np.transpose(E)
+            encoding[i-1, j-1] = (i - le / 2) * (j - ls / 2)
+    encoding = 1 + 4 * encoding / le / ls
+    return np.transpose(encoding)
 
 def zero_nil_slot(t, name=None):
     """
@@ -37,11 +39,13 @@ def zero_nil_slot(t, name=None):
 
 def add_gradient_noise(t, stddev, name=None):
     """
-    Adds gradient noise as described in http://arxiv.org/abs/1511.06807.
+    Adds gradient noise as described in http://arxiv.org/abs/1511.06807 [2].
 
     The input Tensor `t` should be a gradient.
 
     The output will be `t` + gaussian noise.
+
+    0.001 was said to be a good fixed value for memory networks [2].
     """
     with tf.op_scope([t, stddev], name, "add_gradient_noise") as name:
         t = tf.convert_to_tensor(t, name="t")
@@ -49,12 +53,9 @@ def add_gradient_noise(t, stddev, name=None):
         return tf.add(t, gn, name=name)
 
 class MemN2N(object):
-    """
-    End-To-End Memory Network as described in http://arxiv.org/abs/1503.08895.
-    """
     def __init__(self, batch_size, vocab_size, sentence_size, memory_size, embedding_size,
         hops=1,
-        clip_norm=40,
+        clip_norm=40.0,
         initializer=tf.random_normal_initializer(stddev=0.1),
         optimizer=tf.train.AdamOptimizer(learning_rate=1e-2),
         encoding=bag_of_words_encoding,
@@ -82,7 +83,7 @@ class MemN2N(object):
         cross_entropy_sum = tf.reduce_sum(cross_entropy, name="cross_entropy_sum")
         tf.add_to_collection('losses', cross_entropy_sum)
         #loss_op = tf.add_n(tf.get_collection('losses'), name='loss_op')
-        loss_op = cross_entropy_sum
+        loss_op = cross_entropy_sum 
 
         # training op
         # gradient pipeline
@@ -97,11 +98,15 @@ class MemN2N(object):
                 nil_grads_and_vars.append((g, v))
         train_op = self._opt.apply_gradients(nil_grads_and_vars, name="train_op")
 
-        # predict op
+        # predict ops
         predict_op = tf.argmax(logits, 1, name="predict_op")
+        predict_proba_op = tf.nn.softmax(logits, name="predict_proba_op")
+        predict_log_proba_op = tf.log(predict_proba_op, name="predict_log_proba_op")
 
         self.loss_op = loss_op
         self.predict_op = predict_op
+        self.predict_proba_op = predict_proba_op
+        self.predict_log_proba_op = predict_log_proba_op
         self.train_op = train_op
 
         init_op = tf.initialize_all_variables()
@@ -148,6 +153,8 @@ class MemN2N(object):
     def _input_module(self, i_emb, u):
         with tf.name_scope("input_module"):
             i_mem = tf.reduce_sum(i_emb * self._encoding, 2)
+            # Currently tensorflow does not support reduce_dot, so this
+            # is a little hack to get around that.
             u_temp = tf.transpose(tf.expand_dims(u, -1), [0, 2, 1])
             dotted = tf.reduce_sum(i_mem * u_temp, 2)
             # Because we pad empty memories to conform to a memory_size
@@ -171,10 +178,18 @@ class MemN2N(object):
 
     def batch_fit(self, stories, queries, answers):
         feed_dict = {self._stories: stories, self._queries: queries, self._answers: answers}
-        loss_t, _ = self._sess.run([self._loss_op, self._train_op], feed_dict=feed_dict)
+        loss_t, _ = self._sess.run([self.loss_op, self.train_op], feed_dict=feed_dict)
         return loss_t
         
     def predict(self, stories, queries):
         feed_dict = {self._stories: stories, self._queries: queries}
-        return self._sess.run(self._predict_op, feed_dict=feed_dict)
+        return self._sess.run(self.predict_op, feed_dict=feed_dict)
+
+    def predict_log_proba(self, stories, queries):
+        feed_dict = {self._stories: stories, self._queries: queries}
+        return self._sess.run(self.predict_log_proba_op, feed_dict=feed_dict)
+
+    def predict_proba(self, stories, queries):
+        feed_dict = {self._stories: stories, self._queries: queries}
+        return self._sess.run(self.predict_proba_op, feed_dict=feed_dict)
 

@@ -80,7 +80,14 @@ def get_stories(f, only_supporting=False):
 
 def vectorize_data(data, word_idx, sentence_size, memory_size):
     """
-    Vectorize stories and queries and pads them to sentence_size.
+    Vectorize stories and queries.
+
+    If a sentence length < sentence_size, the sentence will be padded with 0's.
+
+    If a story length < memory_size, the story will be padded with empty memories.
+    Empty memories are 1-D arrays of length sentence_size filled with 0's.
+
+    The answer array is returned as a one-hot encoding. This may change in the future!
     """
     S = []
     Q = []

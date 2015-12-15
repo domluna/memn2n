@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-from process_data import load_challenge, vectorize_data
+from data_utils import load_challenge, vectorize_data
 from sklearn import cross_validation, metrics
 from memn2n.memn2n import MemN2N
 from itertools import chain
@@ -10,7 +10,7 @@ import tensorflow as tf
 import numpy as np
 
 seed = 1234
-challenge_n = 3
+challenge_n = 2
 print("Started Challenge:", challenge_n)
 
 # challenge data
