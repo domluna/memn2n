@@ -56,7 +56,7 @@ class MemN2N(object):
     """End-To-End Memory Network."""
     def __init__(self, batch_size, vocab_size, sentence_size, memory_size, embedding_size,
         hops=1,
-        clip_norm=40.0,
+        max_gradient_norm=40.0,
         non_lin=None,
         initializer=tf.random_normal_initializer(stddev=0.1),
         optimizer=tf.train.AdamOptimizer(learning_rate=1e-2),
@@ -70,7 +70,7 @@ class MemN2N(object):
         self._memory_size = memory_size
         self._embedding_size = embedding_size
         self._hops = hops
-        self._clip_norm = clip_norm
+        self._max_gradient_norm = max_gradient_norm
         self._init = initializer
         self._opt = optimizer
         self._name = name
@@ -92,7 +92,7 @@ class MemN2N(object):
         # gradient pipeline
         grads_and_vars = self._opt.compute_gradients(loss_op)
         grads_and_vars = [(add_gradient_noise(g, 0.001), v) for g,v in grads_and_vars]
-        grads_and_vars = [(tf.clip_by_norm(g, self._clip_norm), v) for g,v in grads_and_vars]
+        grads_and_vars = [(tf.clip_by_norm(g, self._max_gradient_norm), v) for g,v in grads_and_vars]
         nil_grads_and_vars = []
         for g, v in grads_and_vars:
             if v.name == self.A.name or v.name == self.B.name or v.name == self.C.name:

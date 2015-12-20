@@ -4,10 +4,10 @@ import os
 import re
 import numpy as np
 
-def load_challenge(data_dir, n, only_supporting=False):
-    '''Load the nth challenge. There are currently 20 challenges in total.
+def load_task(data_dir, n, only_supporting=False):
+    '''Load the nth task. There are currently 20 tasks in total.
 
-    Returns a tuple containing the training and testing data for the challenge.
+    Returns a tuple containing the training and testing data for the task.
     '''
     assert n > 0 and n < 21
 
@@ -29,7 +29,6 @@ def tokenize(sent):
     return [x.strip() for x in re.split('(\W+)?', sent) if x.strip()]
 
 
-# TODO: determine what the value of only_supporting is
 def parse_stories(lines, only_supporting=False):
     '''Parse stories provided in the bAbi tasks format
     If only_supporting is true, only the sentences that support the answer are kept.
