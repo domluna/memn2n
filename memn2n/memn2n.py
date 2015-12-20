@@ -57,6 +57,7 @@ class MemN2N(object):
     def __init__(self, batch_size, vocab_size, sentence_size, memory_size, embedding_size,
         hops=1,
         clip_norm=40.0,
+        non_lin=None,
         initializer=tf.random_normal_initializer(stddev=0.1),
         optimizer=tf.train.AdamOptimizer(learning_rate=1e-2),
         encoding=bag_of_words_encoding,
@@ -150,7 +151,7 @@ class MemN2N(object):
                 o_emb = tf.nn.embedding_lookup(self.C, stories)
                 probs = self._input_module(i_emb, u_k)
                 o_k = self._output_module(probs, o_emb)
-                u_k = o_k + tf.matmul(u_k, self.H)
+                u_k = o_k + tf.nn.relu(tf.matmul(u_k, self.H))
             return tf.matmul(u_k, self.W, name="logits")
         
     def _input_module(self, i_emb, u):
@@ -193,7 +194,6 @@ class MemN2N(object):
         -------
 
         loss: floating-point number, the loss computed for the batch
-
         """
         feed_dict = {self._stories: stories, self._queries: queries, self._answers: answers}
         loss, _ = self._sess.run([self.loss_op, self.train_op], feed_dict=feed_dict)
