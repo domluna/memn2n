@@ -1,15 +1,26 @@
-# memn2n
-WIP implementation of [End-To-End Memory Networks](http://arxiv.org/abs/1503.08895) with sklearn-like interface using Tensorflow.
+# MemN2N
 
-It's not 100% ready yet!
+Implementation of [End-To-End Memory Networks](http://arxiv.org/abs/1503.08895) with sklearn-like interface using Tensorflow.
 
-Currently doing a bunch of experiments but initial results look nice.
+For a task to pass it has to meet 95%+ accuracy. NOTE: This is only training set accuracy, regularization is WIP so validation and testing accuracies are lower. 
+
+Measured on single tasks on the 1k data.
+
+pass: 1,2,5,6,7,8,9,10,11,13,14,20
+fails:
+- 3, ~88% acc
+- 4, ~90% acc
+- 12, ~90% acc
+- 15, ~90% acc
+- 16, ~80% acc
+- 17, ~75% acc
+- 18, ~75% acc
+- 19, ~48% acc
 
 ## TODO
 
-* Run a joint model; train on all 20 tasks and then test
-* Support multi-word answers
+* Run a joint model
 * Linear start - don't do softmax on the probabilities at first
 * Adjacent sharing
 * Temporal Encoding
-* Gradient noise as described [here](http://arxiv.org/abs/1511.06807).
+* Work on regularization

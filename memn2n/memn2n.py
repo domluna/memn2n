@@ -152,6 +152,7 @@ class MemN2N(object):
                 probs = self._input_module(i_emb, u_k)
                 o_k = self._output_module(probs, o_emb)
                 u_k = o_k + tf.nn.relu(tf.matmul(u_k, self.H))
+                #u_k = o_k + tf.matmul(u_k, self.H)
             return tf.matmul(u_k, self.W, name="logits")
         
     def _input_module(self, i_emb, u):

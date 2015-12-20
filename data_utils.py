@@ -4,18 +4,18 @@ import os
 import re
 import numpy as np
 
-def load_task(data_dir, n, only_supporting=False):
-    '''Load the nth task. There are currently 20 tasks in total.
+def load_task(data_dir, task_id, only_supporting=False):
+    '''Load the nth task. There are 20 tasks in total.
 
     Returns a tuple containing the training and testing data for the task.
     '''
-    assert n > 0 and n < 21
+    assert task_id > 0 and task_id < 21
 
     files = os.listdir(data_dir)
     files = [os.path.join(data_dir, f) for f in files]
-    s = 'qa{}_'
-    train_file = [f for f in files if s.format(n) in f and 'train' in f][0]
-    test_file = [f for f in files if s.format(n) in f and 'test' in f][0]
+    s = 'qa{}_'.format(task_id)
+    train_file = [f for f in files if s in f and 'train' in f][0]
+    test_file = [f for f in files if s in f and 'test' in f][0]
     train_data = get_stories(train_file, only_supporting)
     test_data = get_stories(test_file, only_supporting)
     print(train_file, test_file)
@@ -30,7 +30,7 @@ def tokenize(sent):
 
 
 def parse_stories(lines, only_supporting=False):
-    '''Parse stories provided in the bAbi tasks format
+    '''Parse stories provided in the bAbI tasks format
     If only_supporting is true, only the sentences that support the answer are kept.
     '''
     data = []
@@ -44,7 +44,9 @@ def parse_stories(lines, only_supporting=False):
         if '\t' in line: # question
             q, a, supporting = line.split('\t')
             q = tokenize(q)
-            a = tokenize(a)
+            #a = tokenize(a)
+            # answer is one vocab word even if it's actually multiple words
+            a = [a]
             substory = None
 
             # remove question marks
@@ -86,7 +88,7 @@ def vectorize_data(data, word_idx, sentence_size, memory_size):
     If a story length < memory_size, the story will be padded with empty memories.
     Empty memories are 1-D arrays of length sentence_size filled with 0's.
 
-    The answer array is returned as a one-hot encoding. This may change in the future!
+    The answer array is returned as a one-hot encoding.
     """
     S = []
     Q = []
