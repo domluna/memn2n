@@ -6,16 +6,12 @@ For a task to pass it has to meet 95%+ accuracy. NOTE: This is only training set
 
 Measured on single tasks on the 1k data.
 
-pass: 1,2,5,6,7,8,9,10,11,13,14,20
+pass: 1,2,4,5,6,7,8,9,10,11,13,14,15,17,18,20
 fails:
 - 3, ~88% acc
-- 4, ~90% acc
 - 12, ~90% acc
-- 15, ~90% acc
-- 16, ~80% acc
-- 17, ~75% acc
-- 18, ~75% acc
-- 19, ~48% acc
+- 16, ~75% acc
+- 19, ~50% acc
 
 ## TODO
 

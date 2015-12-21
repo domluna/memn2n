@@ -60,7 +60,7 @@ class MemN2N(object):
         non_lin=None,
         initializer=tf.random_normal_initializer(stddev=0.1),
         optimizer=tf.train.AdamOptimizer(learning_rate=1e-2),
-        encoding=bag_of_words_encoding,
+        encoding=position_encoding,
         session=tf.Session(),
         name='MemN2N'):
 
