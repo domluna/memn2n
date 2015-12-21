@@ -85,7 +85,7 @@ class MemN2N(object):
         cross_entropy_sum = tf.reduce_sum(cross_entropy, name="cross_entropy_sum")
         tf.add_to_collection('losses', cross_entropy_sum)
         #loss_op = tf.add_n(tf.get_collection('losses'), name='loss_op')
-        print([l for l in tf.get_collection('losses')])
+        #print([l for l in tf.get_collection('losses')])
         loss_op = cross_entropy_sum 
 
         # training op
@@ -151,8 +151,8 @@ class MemN2N(object):
                 o_emb = tf.nn.embedding_lookup(self.C, stories)
                 probs = self._input_module(i_emb, u_k)
                 o_k = self._output_module(probs, o_emb)
-                u_k = o_k + tf.nn.relu(tf.matmul(u_k, self.H))
-                #u_k = o_k + tf.matmul(u_k, self.H)
+                u_k = tf.matmul(u_k, self.H) + o_k
+                u_k = tf.nn.relu(u_k)
             return tf.matmul(u_k, self.W, name="logits")
         
     def _input_module(self, i_emb, u):

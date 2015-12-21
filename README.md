@@ -11,9 +11,9 @@ fails:
 - 3, ~88% acc
 - 12, ~90% acc
 - 16, ~75% acc
-- 19, ~50% acc
+- 19, ~45% acc
 
-## TODO
+### TODO
 
 * Run a joint model
 * Linear start - don't do softmax on the probabilities at first
