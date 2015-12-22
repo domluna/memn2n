@@ -13,6 +13,7 @@ import numpy as np
 
 tf.flags.DEFINE_float("learning_rate", 0.01, "Learning rate for Adam Optimizer.")
 tf.flags.DEFINE_float("max_gradient_norm", 40.0, "Clip gradients to this norm.")
+tf.flags.DEFINE_integer("evaluation_interval", 10, "Evaluate and print results every x epochs")
 tf.flags.DEFINE_integer("batch_size", 32, "Batch size for training.")
 tf.flags.DEFINE_integer("num_hops", 3, "Number of hops in the Memory Network.")
 tf.flags.DEFINE_integer("num_epochs", 200, "Number of epochs to train for.")
@@ -36,7 +37,7 @@ mean_story_size = int(np.mean(map(len, (s for s, _, _ in train + test))))
 sentence_size = max(map(len, chain.from_iterable(s for s, _, _ in train + test)))
 query_size = max(map(len, (q for _, q, _ in train + test)))
 sentence_size = max(query_size, sentence_size)
-memory_size = min(50, mean_story_size)
+memory_size = min(50, max_story_size)
 
 print("Longest sentence length", sentence_size)
 print("Longest story length", max_story_size)
@@ -64,11 +65,11 @@ val_labels = np.argmax(valA, axis=1)
 
 tf.set_random_seed(FLAGS.random_state)
 batch_size = FLAGS.batch_size
-optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
+optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
 with tf.Session() as sess:
     model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, FLAGS.embedding_size, session=sess, 
                    hops=FLAGS.num_hops, max_gradient_norm=FLAGS.max_gradient_norm, optimizer=optimizer)
-    for t in range(FLAGS.num_epochs+1):
+    for t in range(1, FLAGS.num_epochs+1):
         total_cost = 0.0
         for start in range(0, n_train, batch_size):
             end = start + batch_size
@@ -78,7 +79,7 @@ with tf.Session() as sess:
             cost_t = model.batch_fit(s, q, a)
             total_cost += cost_t
 
-        if t % 10 == 0:
+        if t % FLAGS.evaluation_interval == 0:
             train_preds = []
             for start in range(0, n_train, batch_size):
                 end = start + batch_size

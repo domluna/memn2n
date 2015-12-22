@@ -7,16 +7,18 @@ For a task to pass it has to meet 95%+ accuracy. NOTE: This is only training set
 Measured on single tasks on the 1k data.
 
 pass: 1,2,4,5,6,7,8,9,10,11,13,14,15,17,18,20
+
 fails:
-- 3, ~88% acc
-- 12, ~90% acc
-- 16, ~75% acc
-- 19, ~45% acc
+
+* 3, ~88% acc
+* 12, ~88% acc
+* 16, ~75% acc
+* 19, ~45% acc
+
+Tasks are from the [bAbl](http://arxiv.org/abs/1502.05698) dataset.
 
 ### TODO
 
 * Run a joint model
-* Linear start - don't do softmax on the probabilities at first
-* Adjacent sharing
 * Temporal Encoding
 * Work on regularization

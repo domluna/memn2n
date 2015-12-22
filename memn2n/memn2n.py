@@ -1,5 +1,7 @@
 """End-To-End Memory Networks.
-The implementation comes from http://arxiv.org/abs/1503.08895 [1]"""
+
+The implementation is based on http://arxiv.org/abs/1503.08895 [1]
+"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -7,9 +9,6 @@ from __future__ import division
 import tensorflow as tf
 import numpy as np
 from six.moves import range
-
-def bag_of_words_encoding(sentence_size, embedding_size):
-    return np.ones((sentence_size, embedding_size), dtype=np.float32)
 
 def position_encoding(sentence_size, embedding_size):
     """ 
@@ -20,8 +19,7 @@ def position_encoding(sentence_size, embedding_size):
     le = embedding_size+1
     for i in range(1, le):
         for j in range(1, ls):
-            encoding[i-1, j-1] = (i - le / 2) * (j - ls / 2)
-    encoding = 1 + 4 * encoding / le / ls
+            encoding[i-1, j-1] = (1 - (j /ls)) - (i / le)*(1 - ((2 * j) / ls))
     return np.transpose(encoding)
 
 def zero_nil_slot(t, name=None):
@@ -57,7 +55,6 @@ class MemN2N(object):
     def __init__(self, batch_size, vocab_size, sentence_size, memory_size, embedding_size,
         hops=1,
         max_gradient_norm=40.0,
-        non_lin=None,
         initializer=tf.random_normal_initializer(stddev=0.1),
         optimizer=tf.train.AdamOptimizer(learning_rate=1e-2),
         encoding=position_encoding,
@@ -149,19 +146,21 @@ class MemN2N(object):
             for _ in range(self._hops):
                 i_emb = tf.nn.embedding_lookup(self.A, stories)
                 o_emb = tf.nn.embedding_lookup(self.C, stories)
-                probs = self._input_module(i_emb, u_k)
-                o_k = self._output_module(probs, o_emb)
+                # Memories
+                m = tf.reduce_sum(i_emb * self._encoding, 2, name="m")
+                c = tf.reduce_sum(o_emb * self._encoding, 2, name="c")
+                probs = self._input_module(m, u_k, name="probs")
+                o_k = self._output_module(c, probs, name="o_k")
                 u_k = tf.matmul(u_k, self.H) + o_k
                 u_k = tf.nn.relu(u_k)
             return tf.matmul(u_k, self.W, name="logits")
         
-    def _input_module(self, i_emb, u):
+    def _input_module(self, m, u, name=None):
         with tf.name_scope("input_module"):
-            i_mem = tf.reduce_sum(i_emb * self._encoding, 2)
             # Currently tensorflow does not support reduce_dot, so this
             # is a little hack to get around that.
             u_temp = tf.transpose(tf.expand_dims(u, -1), [0, 2, 1])
-            dotted = tf.reduce_sum(i_mem * u_temp, 2)
+            dotted = tf.reduce_sum(m * u_temp, 2)
             # Because we pad empty memories to conform to a memory_size
             # we add a large enough negative value such that the softmax
             # value of the empty memory is 0.
@@ -172,14 +171,13 @@ class MemN2N(object):
             cond = tf.not_equal(dotted, 0.0)
             # Returns softmax probabilities, acts as an attention mechanism
             # to signal the importance of memories.
-            return tf.nn.softmax(tf.select(cond, dotted, tt))
+            return tf.nn.softmax(tf.select(cond, dotted, tt), name=name)
 
-    def _output_module(self, probs, o_emb):
+    def _output_module(self, c, probs, name=None):
         with tf.name_scope("output_module"):
-            o_mem = tf.reduce_sum(o_emb * self._encoding, 2)
             probs_temp = tf.transpose(tf.expand_dims(probs, -1), [0, 2, 1])
-            o_mem_temp = tf.transpose(o_mem, [0, 2, 1])
-            return tf.reduce_sum(o_mem_temp * probs_temp, 2)
+            c_temp = tf.transpose(c, [0, 2, 1])
+            return tf.reduce_sum(c_temp * probs_temp, 2, name=name)
 
     def batch_fit(self, stories, queries, answers):
         """Runs the training algorithm over the passed batch
