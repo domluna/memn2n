@@ -19,8 +19,13 @@ fails:
 
 Tasks are from the [bAbl](http://arxiv.org/abs/1502.05698) dataset.
 
+### Usage
+
+See `./single.py` for example usage.
+
 ### TODO
 
 * Run a joint model
 * Temporal Encoding
 * Work on regularization
+* Tutorial
