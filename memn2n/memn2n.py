@@ -76,14 +76,15 @@ class MemN2N(object):
         self._build_vars()
         self._encoding = tf.constant(encoding(self._sentence_size, self._embedding_size), name="encoding")
 
-        # loss op
+        # cross entropy
         logits = self._inference(self._stories, self._queries) # (batch_size, vocab_size)
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits, tf.cast(self._answers, tf.float32), name="cross_entropy")
         cross_entropy_sum = tf.reduce_sum(cross_entropy, name="cross_entropy_sum")
+
+        # loss op
         tf.add_to_collection('losses', cross_entropy_sum)
-        #loss_op = tf.add_n(tf.get_collection('losses'), name='loss_op')
-        #print([l for l in tf.get_collection('losses')])
-        loss_op = cross_entropy_sum 
+        loss_op = tf.add_n(tf.get_collection('losses'), name='loss_op')
+        #loss_op = tf.no_op(cross_entropy_sum, name="loss_op")
 
         # training op
         # gradient pipeline
