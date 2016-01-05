@@ -1,5 +1,5 @@
 """Example running MemN2N on a single bAbI task.
-Download taks from facebook.ai/babi """
+Download tasks from facebook.ai/babi """
 from __future__ import absolute_import
 from __future__ import print_function
 
