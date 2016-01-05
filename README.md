@@ -21,7 +21,7 @@ Tasks are from the [bAbl](http://arxiv.org/abs/1502.05698) dataset.
 
 ### Usage
 
-See `./single.py` for example usage.
+See `single.py` for example usage.
 
 ### TODO
 
