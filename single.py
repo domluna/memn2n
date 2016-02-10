@@ -18,7 +18,7 @@ tf.flags.DEFINE_integer("batch_size", 32, "Batch size for training.")
 tf.flags.DEFINE_integer("hops", 3, "Number of hops in the Memory Network.")
 tf.flags.DEFINE_integer("epochs", 200, "Number of epochs to train for.")
 tf.flags.DEFINE_integer("embedding_size", 20, "Embedding size for embedding matrices.")
-tf.flags.DEFINE_integer("max_memory_size", 50, "Maximum size of memory.")
+tf.flags.DEFINE_integer("memory_size", 50, "Maximum size of memory.")
 tf.flags.DEFINE_integer("task_id", 1, "bAbI task id, 1 <= id <= 20")
 tf.flags.DEFINE_integer("random_state", None, "Random state.")
 tf.flags.DEFINE_string("data_dir", "data/tasks_1-20_v1-2/en/", "Directory containing bAbI tasks")
@@ -36,9 +36,9 @@ max_story_size = max(map(len, (s for s, _, _ in train + test)))
 mean_story_size = int(np.mean(map(len, (s for s, _, _ in train + test))))
 sentence_size = max(map(len, chain.from_iterable(s for s, _, _ in train + test)))
 query_size = max(map(len, (q for _, q, _ in train + test)))
-memory_size = min(FLAGS.max_memory_size, max_story_size)
-vocab_size = len(word_idx) + 1 + memory_size # +1 for nil word
-sentence_size = max(query_size, sentence_size) + 1 # for the position
+memory_size = min(FLAGS.memory_size, max_story_size)
+vocab_size = len(word_idx) + 1 # +1 for nil word
+sentence_size = max(query_size, sentence_size) # for the position
 
 print("Longest sentence length", sentence_size)
 print("Longest story length", max_story_size)
@@ -69,7 +69,6 @@ val_labels = np.argmax(valA, axis=1)
 tf.set_random_seed(FLAGS.random_state)
 batch_size = FLAGS.batch_size
 optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
-# optimizer = tf.train.GradientDescentOptimizer(FLAGS.learning_rate)
 with tf.Session() as sess:
     model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, FLAGS.embedding_size, session=sess,
                    hops=FLAGS.hops, max_grad_norm=FLAGS.max_grad_norm, optimizer=optimizer)

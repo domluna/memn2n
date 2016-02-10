@@ -20,8 +20,6 @@ def position_encoding(sentence_size, embedding_size):
         for j in range(1, ls):
             encoding[i-1, j-1] = (i - (le-1)/2) * (j - (ls-1)/2)
     encoding = 1 + 4 * encoding / embedding_size / sentence_size
-    # temporal has nothing to do with the encoding
-    encoding[:, -1] = 1.0
     return np.transpose(encoding)
 
 def zero_nil_slot(t, name=None):
@@ -55,8 +53,9 @@ def add_gradient_noise(t, stddev=1e-3, name=None):
 class MemN2N(object):
     """End-To-End Memory Network."""
     def __init__(self, batch_size, vocab_size, sentence_size, memory_size, embedding_size,
-        hops=1,
+        hops=3,
         max_grad_norm=40.0,
+        nonlin=None,
         initializer=tf.random_normal_initializer(stddev=0.1),
         optimizer=tf.train.AdamOptimizer(learning_rate=1e-2),
         encoding=position_encoding,
@@ -69,7 +68,8 @@ class MemN2N(object):
         self._memory_size = memory_size
         self._embedding_size = embedding_size
         self._hops = hops
-        self._max_gradient_norm = max_grad_norm
+        self._max_grad_norm = max_grad_norm
+        self._nonlin = nonlin
         self._init = initializer
         self._opt = optimizer
         self._name = name
@@ -88,7 +88,7 @@ class MemN2N(object):
 
         # gradient pipeline
         grads_and_vars = self._opt.compute_gradients(loss_op)
-        grads_and_vars = [(tf.clip_by_norm(g, self._max_gradient_norm), v) for g,v in grads_and_vars]
+        grads_and_vars = [(tf.clip_by_norm(g, self._max_grad_norm), v) for g,v in grads_and_vars]
         grads_and_vars = [(add_gradient_noise(g), v) for g,v in grads_and_vars]
         nil_grads_and_vars = []
         for g, v in grads_and_vars:
@@ -97,7 +97,6 @@ class MemN2N(object):
             else:
                 nil_grads_and_vars.append((g, v))
         train_op = self._opt.apply_gradients(nil_grads_and_vars, name="train_op")
-        # train_op = self._opt.apply_gradients(grads_and_vars, name="train_op")
 
         # predict ops
         predict_op = tf.argmax(logits, 1, name="predict_op")
@@ -128,6 +127,9 @@ class MemN2N(object):
             B = tf.concat(0, [ nil_word_slot, self._init([self._vocab_size-1, self._embedding_size]) ])
             self.A = tf.Variable(A, name="A")
             self.B = tf.Variable(B, name="B")
+
+            self.TA = tf.Variable(self._init([self._memory_size, self._embedding_size]), name='TA')
+
             self.H = tf.Variable(self._init([self._embedding_size, self._embedding_size]), name="H")
             self.W = tf.Variable(self._init([self._embedding_size, self._vocab_size]), name="W")
         self._nil_vars = set([self.A.name, self.B.name])
@@ -138,30 +140,23 @@ class MemN2N(object):
             u_0 = tf.reduce_sum(q_emb * self._encoding, 1)
             u = [u_0]
             m_emb = tf.nn.embedding_lookup(self.A, stories)
-            m = tf.reduce_sum(m_emb * self._encoding, 2)
+            m = tf.reduce_sum(m_emb * self._encoding, 2) + self.TA
             for _ in range(self._hops):
                 u_temp = tf.transpose(tf.expand_dims(u[-1], -1), [0, 2, 1])
                 dotted = tf.reduce_sum(m * u_temp, 2)
 
                 # Calculate probabilities
-                # probs = tf.nn.softmax(dotted)
-                # probs = dotted
-                # Because we pad empty memories to conform to a memory_size
-                # we add a large enough negative value such that the softmax
-                # value of the empty memory is 0.
-                # Otherwise, empty memories, depending on the memory_size will
-                # have a larger and larger impact.
-                bs = tf.shape(dotted)[0]
-                tt = tf.fill(tf.pack([bs, self._memory_size]), -10000.0)
-                cond = tf.not_equal(dotted, 0.0)
-                # Returns softmax probabilities, acts as an attention mechanism
-                # to signal the importance of memories.
-                probs = tf.nn.softmax(tf.select(cond, dotted, tt))
+                probs = tf.nn.softmax(dotted)
 
                 probs_temp = tf.transpose(tf.expand_dims(probs, -1), [0, 2, 1])
                 c_temp = tf.transpose(m, [0, 2, 1])
                 o_k = tf.reduce_sum(c_temp * probs_temp, 2)
+
                 u_k = tf.matmul(u[-1], self.H) + o_k
+                # nonlinearity
+                if self._nonlin:
+                    u_k = nonlin(u_k)
+
                 u.append(u_k)
 
             return tf.matmul(u_k, self.W)
