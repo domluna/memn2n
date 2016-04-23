@@ -61,6 +61,40 @@ class MemN2N(object):
         encoding=position_encoding,
         session=tf.Session(),
         name='MemN2N'):
+        """Creates an End-To-End Memory Network
+
+        Args:
+            batch_size: The size of the batch.
+
+            vocab_size: The size of the vocabulary (should include the nil word). The nil word
+            one-hot encoding should be 0.
+
+            sentence_size: The max size of a sentence in the data. All sentences should be padded
+            to this length. If padding is required it should be done with nil one-hot encoding (0).
+
+            memory_size: The max size of the memory. Since Tensorflow currently does not support jagged arrays
+            all memories must be padded to this length. If padding is required, the extra memories should be
+            empty memories; memories filled with the nil word ([0, 0, 0, ......, 0]).
+
+            embedding_size: The size of the word embedding.
+
+            hops: The number of hops. A hop consists of reading and addressing a memory slot.
+            Defaults to `3`.
+
+            max_grad_norm: Maximum L2 norm clipping value. Defaults to `40.0`.
+
+            nonlin: Non-linearity. Defaults to `None`.
+
+            initializer: Weight initializer. Defaults to `tf.random_normal_initializer(stddev=0.1)`.
+
+            optimizer: Optimizer algorithm used for SGD. Defaults to `tf.train.AdamOptimizer(learning_rate=1e-2)`.
+
+            encoding: A function returning a 2D Tensor (sentence_size, embedding_size). Defaults to `position_encoding`.
+
+            session: Tensorflow Session the model is run with. Defaults to `tf.Session()`.
+
+            name: Name of the End-To-End Memory Network. Defaults to `MemN2N`.
+        """
 
         self._batch_size = batch_size
         self._vocab_size = vocab_size
@@ -142,6 +176,7 @@ class MemN2N(object):
             m_emb = tf.nn.embedding_lookup(self.A, stories)
             m = tf.reduce_sum(m_emb * self._encoding, 2) + self.TA
             for _ in range(self._hops):
+                # hack to get around no reduce_dot
                 u_temp = tf.transpose(tf.expand_dims(u[-1], -1), [0, 2, 1])
                 dotted = tf.reduce_sum(m * u_temp, 2)
 
