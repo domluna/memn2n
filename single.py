@@ -12,6 +12,7 @@ import tensorflow as tf
 import numpy as np
 
 tf.flags.DEFINE_float("learning_rate", 0.01, "Learning rate for Adam Optimizer.")
+tf.flags.DEFINE_float("epsilon", 1e-8, "Epsilon value for Adam Optimizer.")
 tf.flags.DEFINE_float("max_grad_norm", 40.0, "Clip gradients to this norm.")
 tf.flags.DEFINE_integer("evaluation_interval", 10, "Evaluate and print results every x epochs")
 tf.flags.DEFINE_integer("batch_size", 32, "Batch size for training.")
@@ -68,7 +69,7 @@ val_labels = np.argmax(valA, axis=1)
 
 tf.set_random_seed(FLAGS.random_state)
 batch_size = FLAGS.batch_size
-optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
+optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate, epsilon=FLAGS.epsilon)
 with tf.Session() as sess:
     model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, FLAGS.embedding_size, session=sess,
                    hops=FLAGS.hops, max_grad_norm=FLAGS.max_grad_norm, optimizer=optimizer)

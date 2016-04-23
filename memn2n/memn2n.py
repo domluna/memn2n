@@ -173,9 +173,9 @@ class MemN2N(object):
             q_emb = tf.nn.embedding_lookup(self.B, queries)
             u_0 = tf.reduce_sum(q_emb * self._encoding, 1)
             u = [u_0]
-            m_emb = tf.nn.embedding_lookup(self.A, stories)
-            m = tf.reduce_sum(m_emb * self._encoding, 2) + self.TA
             for _ in range(self._hops):
+                m_emb = tf.nn.embedding_lookup(self.A, stories)
+                m = tf.reduce_sum(m_emb * self._encoding, 2) + self.TA
                 # hack to get around no reduce_dot
                 u_temp = tf.transpose(tf.expand_dims(u[-1], -1), [0, 2, 1])
                 dotted = tf.reduce_sum(m * u_temp, 2)
