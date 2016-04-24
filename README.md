@@ -6,7 +6,9 @@ Implementation of [End-To-End Memory Networks](http://arxiv.org/abs/1503.08895) 
 
 ### Usage
 
-See `./single.py` or `./joint.py` for example usage.
+Running a [single bAbI task](./single.py)
+
+Running a [joint model on all bAbI tasks](./joint.py)
 
 ### Results
 
@@ -30,7 +32,7 @@ A joint model was also run with the following params:
   * epsilon: 1.0
   * embedding_size: 40
 
-See `./results/joint_100_epochs.csv` for full results.
+[Full results](./results/joint_100_epochs.csv).
 
 ### Notes
 
