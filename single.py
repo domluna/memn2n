@@ -7,6 +7,7 @@ from data_utils import load_task, vectorize_data
 from sklearn import cross_validation, metrics
 from memn2n.memn2n import MemN2N
 from itertools import chain
+from six.moves import range
 
 import tensorflow as tf
 import numpy as np
@@ -29,14 +30,15 @@ print("Started Task:", FLAGS.task_id)
 
 # task data
 train, test = load_task(FLAGS.data_dir, FLAGS.task_id)
+data = train + test
 
-vocab = sorted(reduce(lambda x, y: x | y, (set(list(chain.from_iterable(s)) + q + a) for s, q, a in train + test)))
+vocab = sorted(reduce(lambda x, y: x | y, (set(list(chain.from_iterable(s)) + q + a) for s, q, a in data)))
 word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
 
-max_story_size = max(map(len, (s for s, _, _ in train + test)))
-mean_story_size = int(np.mean(map(len, (s for s, _, _ in train + test))))
-sentence_size = max(map(len, chain.from_iterable(s for s, _, _ in train + test)))
-query_size = max(map(len, (q for _, q, _ in train + test)))
+max_story_size = max(map(len, (s for s, _, _ in data)))
+mean_story_size = int(np.mean(map(len, (s for s, _, _ in data))))
+sentence_size = max(map(len, chain.from_iterable(s for s, _, _ in data)))
+query_size = max(map(len, (q for _, q, _ in data)))
 memory_size = min(FLAGS.memory_size, max_story_size)
 vocab_size = len(word_idx) + 1 # +1 for nil word
 sentence_size = max(query_size, sentence_size) # for the position
@@ -70,10 +72,14 @@ val_labels = np.argmax(valA, axis=1)
 tf.set_random_seed(FLAGS.random_state)
 batch_size = FLAGS.batch_size
 optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate, epsilon=FLAGS.epsilon)
+
+
+batches = zip(range(0, n_train-batch_size, batch_size), range(batch_size, n_train, batch_size))
 with tf.Session() as sess:
     model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, FLAGS.embedding_size, session=sess,
                    hops=FLAGS.hops, max_grad_norm=FLAGS.max_grad_norm, optimizer=optimizer)
     for t in range(1, FLAGS.epochs+1):
+        np.random.shuffle(batches)
         total_cost = 0.0
         for start in range(0, n_train, batch_size):
             end = start + batch_size

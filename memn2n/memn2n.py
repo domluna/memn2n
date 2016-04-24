@@ -199,17 +199,13 @@ class MemN2N(object):
     def batch_fit(self, stories, queries, answers):
         """Runs the training algorithm over the passed batch
 
-        Inputs
-        ------
+        Args:
+            stories: Tensor (None, memory_size, sentence_size)
+            queries: Tensor (None, sentence_size)
+            answers: Tensor (None, vocab_size)
 
-        stories: Tensor (None, memory_size, sentence_size)
-        queries: Tensor (None, sentence_size)
-        answers: Tensor (None, vocab_size)
-
-        Returns
-        -------
-
-        loss: floating-point number, the loss computed for the batch
+        Returns:
+            loss: floating-point number, the loss computed for the batch
         """
         feed_dict = {self._stories: stories, self._queries: queries, self._answers: answers}
         loss, _ = self._sess.run([self.loss_op, self.train_op], feed_dict=feed_dict)
@@ -218,16 +214,12 @@ class MemN2N(object):
     def predict(self, stories, queries):
         """Predicts answers as one-hot encoding.
 
-        Inputs
-        ------
+        Args:
+            stories: Tensor (None, memory_size, sentence_size)
+            queries: Tensor (None, sentence_size)
 
-        stories: Tensor (None, memory_size, sentence_size)
-        queries: Tensor (None, sentence_size)
-
-        Returns
-        -------
-
-        answers: Tensor (None, vocab_size)
+        Returns:
+            answers: Tensor (None, vocab_size)
         """
         feed_dict = {self._stories: stories, self._queries: queries}
         return self._sess.run(self.predict_op, feed_dict=feed_dict)
@@ -235,16 +227,12 @@ class MemN2N(object):
     def predict_proba(self, stories, queries):
         """Predicts probabilities of answers.
 
-        Inputs
-        ------
+        Args:
+            stories: Tensor (None, memory_size, sentence_size)
+            queries: Tensor (None, sentence_size)
 
-        stories: Tensor (None, memory_size, sentence_size)
-        queries: Tensor (None, sentence_size)
-
-        Returns
-        -------
-
-        answers: Tensor (None, vocab_size)
+        Returns:
+            answers: Tensor (None, vocab_size)
         """
         feed_dict = {self._stories: stories, self._queries: queries}
         return self._sess.run(self.predict_proba_op, feed_dict=feed_dict)
@@ -252,16 +240,11 @@ class MemN2N(object):
     def predict_log_proba(self, stories, queries):
         """Predicts log probabilities of answers.
 
-        Inputs
-        ------
-
-        stories: Tensor (None, memory_size, sentence_size)
-        queries: Tensor (None, sentence_size)
-
-        Returns
-        -------
-
-        answers: Tensor (None, vocab_size)
+        Args:
+            stories: Tensor (None, memory_size, sentence_size)
+            queries: Tensor (None, sentence_size)
+        Returns:
+            answers: Tensor (None, vocab_size)
         """
         feed_dict = {self._stories: stories, self._queries: queries}
         return self._sess.run(self.predict_log_proba_op, feed_dict=feed_dict)

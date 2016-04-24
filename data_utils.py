@@ -18,7 +18,6 @@ def load_task(data_dir, task_id, only_supporting=False):
     test_file = [f for f in files if s in f and 'test' in f][0]
     train_data = get_stories(train_file, only_supporting)
     test_data = get_stories(test_file, only_supporting)
-    print(train_file, test_file)
     return train_data, test_data
 
 def tokenize(sent):

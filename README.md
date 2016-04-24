@@ -12,8 +12,6 @@ Several other tasks have 80%+ testing accuracy.
 
 The next step is to run a train a model on all tasks.
 
-### Notable differences from model in paper
-
 ### Usage
 
 See `single.py` for example usage.
