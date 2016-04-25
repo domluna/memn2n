@@ -4,6 +4,14 @@ Implementation of [End-To-End Memory Networks](http://arxiv.org/abs/1503.08895) 
 
 ![MemN2N picture](https://www.dropbox.com/s/3rdwfxt80v45uqm/Screenshot%202015-11-19%2000.57.27.png?dl=1)
 
+### Get Started
+
+```
+git clone git@github.com:domluna/memn2n.git
+cd memn2n
+python single.py
+```
+
 ### Usage
 
 Running a [single bAbI task](./single.py)
