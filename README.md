@@ -12,11 +12,19 @@ cd memn2n
 python single.py
 ```
 
-### Usage
+### Examples
 
 Running a [single bAbI task](./single.py)
 
 Running a [joint model on all bAbI tasks](./joint.py)
+
+These files are also a good example of usage.
+
+### Requirements
+
+* tensorflow 0.8
+* scikit-learn 0.17.1
+* six 1.10.0
 
 ### Results
 
