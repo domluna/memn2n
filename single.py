@@ -5,7 +5,7 @@ from __future__ import print_function
 
 from data_utils import load_task, vectorize_data
 from sklearn import cross_validation, metrics
-from memn2n.memn2n import MemN2N
+from memn2n import MemN2N
 from itertools import chain
 from six.moves import range
 
