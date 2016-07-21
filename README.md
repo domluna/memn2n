@@ -8,7 +8,13 @@ Implementation of [End-To-End Memory Networks](http://arxiv.org/abs/1503.08895) 
 
 ```
 git clone git@github.com:domluna/memn2n.git
-cd memn2n
+
+mkdir ./memn2n/data/
+cd ./memn2n/data/
+wget http://www.thespermwhale.com/jaseweston/babi/tasks_1-20_v1-2.tar.gz
+tar xzvf ./tasks_1-20_v1-2.tar.gz
+
+cd ../
 python single.py
 ```
 
