@@ -7,7 +7,7 @@ from data_utils import load_task, vectorize_data
 from sklearn import cross_validation, metrics
 from memn2n import MemN2N
 from itertools import chain
-from six.moves import range
+from six.moves import range, reduce
 
 import tensorflow as tf
 import numpy as np
@@ -41,7 +41,7 @@ vocab = sorted(reduce(lambda x, y: x | y, (set(list(chain.from_iterable(s)) + q 
 word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
 
 max_story_size = max(map(len, (s for s, _, _ in data)))
-mean_story_size = int(np.mean(map(len, (s for s, _, _ in data))))
+mean_story_size = int(np.mean([ len(s) for s, _, _ in data ]))
 sentence_size = max(map(len, chain.from_iterable(s for s, _, _ in data)))
 query_size = max(map(len, (q for _, q, _ in data)))
 memory_size = min(FLAGS.memory_size, max_story_size)
@@ -100,6 +100,8 @@ optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate, epsilon=FL
 
 # This avoids feeding 1 task after another, instead each batch has a random sampling of tasks
 batches = zip(range(0, n_train-batch_size, batch_size), range(batch_size, n_train, batch_size))
+batches = [(start, end) for start,end in batches]
+
 with tf.Session() as sess:
     model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, FLAGS.embedding_size, session=sess,
                    hops=FLAGS.hops, max_grad_norm=FLAGS.max_grad_norm, optimizer=optimizer)
@@ -107,7 +109,6 @@ with tf.Session() as sess:
         np.random.shuffle(batches)
         total_cost = 0.0
         for start, end in batches:
-            end = start + batch_size
             s = trainS[start:end]
             q = trainQ[start:end]
             a = trainA[start:end]
