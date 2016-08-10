@@ -1,3 +1,4 @@
 *.pyc
 data
 *.md~
+__pycache__
