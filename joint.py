@@ -11,6 +11,7 @@ from six.moves import range, reduce
 
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 
 tf.flags.DEFINE_float("learning_rate", 0.01, "Learning rate for Adam Optimizer.")
 tf.flags.DEFINE_float("epsilon", 1e-8, "Epsilon value for Adam Optimizer.")
