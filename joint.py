@@ -14,21 +14,19 @@ import numpy as np
 import pandas as pd
 
 tf.flags.DEFINE_float("learning_rate", 0.01, "Learning rate for Adam Optimizer.")
-tf.flags.DEFINE_float("epsilon", 1e-8, "Epsilon value for Adam Optimizer.")
+tf.flags.DEFINE_float("anneal_rate", 15, "Number of epochs between halving the learnign rate.")
+tf.flags.DEFINE_float("anneal_stop_epoch", 60, "Epoch number to end annealed lr schedule.")
 tf.flags.DEFINE_float("max_grad_norm", 40.0, "Clip gradients to this norm.")
 tf.flags.DEFINE_integer("evaluation_interval", 10, "Evaluate and print results every x epochs")
 tf.flags.DEFINE_integer("batch_size", 32, "Batch size for training.")
 tf.flags.DEFINE_integer("hops", 3, "Number of hops in the Memory Network.")
-tf.flags.DEFINE_integer("epochs", 100, "Number of epochs to train for.")
+tf.flags.DEFINE_integer("epochs", 60, "Number of epochs to train for.")
 tf.flags.DEFINE_integer("embedding_size", 40, "Embedding size for embedding matrices.")
 tf.flags.DEFINE_integer("memory_size", 50, "Maximum size of memory.")
 tf.flags.DEFINE_integer("random_state", None, "Random state.")
 tf.flags.DEFINE_string("data_dir", "data/tasks_1-20_v1-2/en/", "Directory containing bAbI tasks")
 tf.flags.DEFINE_string("output_file", "scores.csv", "Name of output file for final bAbI accuracy scores.")
 FLAGS = tf.flags.FLAGS
-
-print("Started Joint Model")
-
 # load all train/test data
 ids = range(1, 21)
 train, test = [], []
@@ -48,6 +46,7 @@ query_size = max(map(len, (q for _, q, _ in data)))
 memory_size = min(FLAGS.memory_size, max_story_size)
 vocab_size = len(word_idx) + 1 # +1 for nil word
 sentence_size = max(query_size, sentence_size) # for the position
+sentence_size += 1  # +1 for time words
 
 print("Longest sentence length", sentence_size)
 print("Longest story length", max_story_size)
@@ -97,7 +96,6 @@ val_labels = np.argmax(valA, axis=1)
 
 tf.set_random_seed(FLAGS.random_state)
 batch_size = FLAGS.batch_size
-optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate, epsilon=FLAGS.epsilon)
 
 # This avoids feeding 1 task after another, instead each batch has a random sampling of tasks
 batches = zip(range(0, n_train-batch_size, batch_size), range(batch_size, n_train, batch_size))
@@ -105,15 +103,22 @@ batches = [(start, end) for start,end in batches]
 
 with tf.Session() as sess:
     model = MemN2N(batch_size, vocab_size, sentence_size, memory_size, FLAGS.embedding_size, session=sess,
-                   hops=FLAGS.hops, max_grad_norm=FLAGS.max_grad_norm, optimizer=optimizer)
+                   hops=FLAGS.hops, max_grad_norm=FLAGS.max_grad_norm)
     for i in range(1, FLAGS.epochs+1):
+        # Stepped learning rate
+        if i - 1 <= FLAGS.anneal_stop_epoch:
+            anneal = 2.0 ** ((i - 1) // FLAGS.anneal_rate)
+        else:
+            anneal = 2.0 ** (FLAGS.anneal_stop_epoch // FLAGS.anneal_rate)
+        lr = FLAGS.learning_rate / anneal
+
         np.random.shuffle(batches)
         total_cost = 0.0
         for start, end in batches:
             s = trainS[start:end]
             q = trainQ[start:end]
             a = trainA[start:end]
-            cost_t = model.batch_fit(s, q, a)
+            cost_t = model.batch_fit(s, q, a, lr)
             total_cost += cost_t
 
         if i % FLAGS.evaluation_interval == 0:

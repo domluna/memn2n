@@ -101,6 +101,11 @@ def vectorize_data(data, word_idx, sentence_size, memory_size):
         # take only the most recent sentences that fit in memory
         ss = ss[::-1][:memory_size][::-1]
 
+        # Make the last word of each sentence the time 'word' which 
+        # corresponds to vector of lookup table
+        for i in range(len(ss)):
+            ss[i][-1] = len(word_idx) - memory_size - i + len(ss)
+
         # pad to memory_size
         lm = max(0, memory_size - len(ss))
         for _ in range(lm):
