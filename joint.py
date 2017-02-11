@@ -44,6 +44,11 @@ mean_story_size = int(np.mean([ len(s) for s, _, _ in data ]))
 sentence_size = max(map(len, chain.from_iterable(s for s, _, _ in data)))
 query_size = max(map(len, (q for _, q, _ in data)))
 memory_size = min(FLAGS.memory_size, max_story_size)
+
+# Add time words/indexes
+for i in range(memory_size):
+    word_idx['time{}'.format(i+1)] = 'time{}'.format(i+1)
+
 vocab_size = len(word_idx) + 1 # +1 for nil word
 sentence_size = max(query_size, sentence_size) # for the position
 sentence_size += 1  # +1 for time words
