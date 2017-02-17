@@ -28,7 +28,7 @@ These files are also a good example of usage.
 
 ### Requirements
 
-* tensorflow 0.8
+* tensorflow 1.0
 * scikit-learn 0.17.1
 * six 1.10.0
 
