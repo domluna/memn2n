@@ -34,8 +34,8 @@ def zero_nil_slot(t, name=None):
     with tf.op_scope([t], name, "zero_nil_slot") as name:
         t = tf.convert_to_tensor(t, name="t")
         s = tf.shape(t)[1]
-        z = tf.zeros(tf.pack([1, s]))
-        return tf.concat(0, [z, tf.slice(t, [1, 0], [-1, -1])], name=name)
+        z = tf.zeros(tf.stack([1, s]))
+        return tf.concat(axis=0, values=[z, tf.slice(t, [1, 0], [-1, -1])], name=name)
 
 def add_gradient_noise(t, stddev=1e-3, name=None):
     """
@@ -117,7 +117,7 @@ class MemN2N(object):
 
         # cross entropy
         logits = self._inference(self._stories, self._queries) # (batch_size, vocab_size)
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits, tf.cast(self._answers, tf.float32), name="cross_entropy")
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=tf.cast(self._answers, tf.float32), name="cross_entropy")
         cross_entropy_sum = tf.reduce_sum(cross_entropy, name="cross_entropy_sum")
 
         # loss op
@@ -147,7 +147,7 @@ class MemN2N(object):
         self.predict_log_proba_op = predict_log_proba_op
         self.train_op = train_op
 
-        init_op = tf.initialize_all_variables()
+        init_op = tf.global_variables_initializer()
         self._sess = session
         self._sess.run(init_op)
 
@@ -161,8 +161,8 @@ class MemN2N(object):
     def _build_vars(self):
         with tf.variable_scope(self._name):
             nil_word_slot = tf.zeros([1, self._embedding_size])
-            A = tf.concat(0, [ nil_word_slot, self._init([self._vocab_size-1, self._embedding_size]) ])
-            C = tf.concat(0, [ nil_word_slot, self._init([self._vocab_size-1, self._embedding_size]) ])
+            A = tf.concat(axis=0, values=[ nil_word_slot, self._init([self._vocab_size-1, self._embedding_size]) ])
+            C = tf.concat(axis=0, values=[ nil_word_slot, self._init([self._vocab_size-1, self._embedding_size]) ])
 
             self.A_1 = tf.Variable(A, name="A")
 
